@@ -1,0 +1,56 @@
+/* Dark "intelligence monitor" base, ported from the Streamlit dashboard's CSS. */
+
+:root {
+  --page-bg: #0e1117;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--page-bg);
+  color: #e6e6e6;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: #4da3ff;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid #2a2d35;
+  margin: 1rem 0;
+}
+
+/* Slim dark scrollbars to match the theme. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0e1117;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2d35;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3d45;
+}
+
+/* deck.gl tooltip: keep the multi-line \n formatting from getTooltip readable. */
+.deck-tooltip {
+  white-space: pre-line !important;
+  font-size: 0.72rem !important;
+  background: #1a1d23 !important;
+  border: 1px solid #2a2d35 !important;
+  border-radius: 4px !important;
+  color: #e6e6e6 !important;
+}

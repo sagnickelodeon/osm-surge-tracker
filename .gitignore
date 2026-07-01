@@ -1,0 +1,40 @@
+# ---- Secrets (NEVER commit) ----
+secret.env
+**/secret.env
+**/.streamlit/secrets.toml
+.env
+.env.local
+.env*.local
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# project virtualenv (anchored — a bare "osm/" would also match the dashboard's
+# app/api/osm/ proxy route and wrongly exclude it)
+/osm/
+/src/osm/
+
+# ---- Data / warehouse (large, regenerated) ----
+data/
+*.duckdb
+*.duckdb.wal
+*.parquet
+
+# ---- Poller runtime state ----
+src/poller/state.txt
+
+# ---- Node / Next.js ----
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

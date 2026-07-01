@@ -1,0 +1,23 @@
+# OSM Surge Tracker — combined requirements (poller + processor + api)
+# Install with: pip install -r requirements.txt
+
+# Poller
+osmium==4.3.1           # 3.7.0 has no pre-built wheel for Python 3.13 on Windows
+
+# Processor
+reverse_geocoder>=1.5.1
+openai>=1.0.0
+aiohttp>=3.9.0
+
+# API
+fastapi==0.115.14
+uvicorn[standard]==0.34.3
+slowapi==0.1.9          # in-app rate limiting for POST /track
+
+# Shared
+duckdb==1.5.3
+pydantic==2.13.4
+redis==5.0.3
+requests==2.31.0
+azure-storage-blob>=12.19.0  # optional — silver/gold archive + visitor log
+python-dotenv==1.0.1    # loads secret.env in every component's entry point

@@ -1,0 +1,7 @@
+fastapi==0.115.14
+uvicorn[standard]==0.34.3
+pydantic==2.13.4
+duckdb==1.5.3
+slowapi==0.1.9          # app-level rate limiting for POST /track (no NGINX in front)
+azure-storage-blob>=12.19.0
+python-dotenv==1.0.1

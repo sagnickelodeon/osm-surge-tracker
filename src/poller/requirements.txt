@@ -1,0 +1,4 @@
+osmium==4.3.1
+redis==5.0.3
+requests==2.31.0
+python-dotenv==1.0.1

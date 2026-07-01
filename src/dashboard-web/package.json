@@ -1,0 +1,30 @@
+{
+  "name": "osm-surge-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Component 3b — OSM Surge Tracker dashboard (Next.js). Read-only frontend over the FastAPI backend.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@deck.gl/aggregation-layers": "^9.0.38",
+    "@deck.gl/core": "^9.0.38",
+    "@deck.gl/layers": "^9.0.38",
+    "@deck.gl/react": "^9.0.38",
+    "maplibre-gl": "^4.7.1",
+    "next": "^16.2.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-map-gl": "^7.1.7",
+    "swr": "^2.2.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "typescript": "^5.7.0"
+  }
+}
