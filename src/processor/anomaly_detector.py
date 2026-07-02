@@ -8,7 +8,7 @@ import duckdb
 import redis
 
 from db import get_baseline, get_global_95th_percentile
-from enricher import COUNTRY_NAMES
+from enricher import country_name_for_code
 from timeutil import now_ist
 
 ZSCORE_THRESHOLD    = 3.0
@@ -93,7 +93,7 @@ def _detect_surge(
     )
     conn.commit()
 
-    country_name = COUNTRY_NAMES.get(country_code, country_code)
+    country_name = country_name_for_code(country_code)
 
     redis_client.xadd(
         STREAM_SURGES,

@@ -157,7 +157,7 @@ cd dashboard-web && echo "API_BASE_URL=http://localhost:8000" > .env.local
 ```
 
 📖 **Step-by-step:** [RUNNING_LOCALLY.md](RUNNING_LOCALLY.md) (expected logs, timing,
-troubleshooting). 🚀 **Deploy publicly:** [DEPLOYMENT.md](DEPLOYMENT.md).
+troubleshooting).
 
 ### Optional environment variables
 

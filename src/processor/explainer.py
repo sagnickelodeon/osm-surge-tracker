@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import aiohttp
 import duckdb
 import redis
+import reverse_geocoder as rg
 from openai import AsyncOpenAI
 
 from redis_consumer import (
@@ -45,30 +46,32 @@ def _newsapi_tick() -> None:
     _newsapi_count += 1
 
 
-async def _fetch_news(
-    session: aiohttp.ClientSession,
-    country_name: str | None,
-    admin_region: str | None,
-) -> list[dict]:
+async def _place_name_for_surge(surge: dict) -> str | None:
+    """Reverse-geocode the surge centroid to a city/place name. Silver records only
+    carry country_code/admin_region (a province-level name that rarely appears
+    verbatim in headlines) — the centroid lets us recover a more newsworthy city
+    name for the NewsAPI query, same as enricher's per-edit geocoding but for a
+    single point."""
+    try:
+        lat = float(surge.get("centroid_lat") or "")
+        lon = float(surge.get("centroid_lon") or "")
+    except (TypeError, ValueError):
+        return None
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        return None
+
+    try:
+        result = await asyncio.to_thread(rg.search, [(lat, lon)], mode=1)
+        return result[0].get("name") or None
+    except Exception:
+        logger.exception("Reverse geocode for city name failed (%s, %s)", lat, lon)
+        return None
+
+
+async def _query_newsapi(session: aiohttp.ClientSession, params: dict) -> list[dict]:
     if not _newsapi_allowed():
         logger.warning("NewsAPI daily limit reached — skipping news fetch")
         return []
-
-    api_key = os.environ.get("NEWSAPI_KEY", "")
-    if not api_key:
-        return []
-
-    query = " ".join(filter(None, [admin_region, country_name]))
-    since = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    params = {
-        "q":        query,
-        "from":     since,
-        "sortBy":   "relevancy",
-        "pageSize": "3",
-        "apiKey":   api_key,
-        "language": "en",
-    }
 
     try:
         _newsapi_tick()
@@ -81,34 +84,98 @@ async def _fetch_news(
             if a.get("title")
         ]
     except Exception:
-        logger.exception("NewsAPI fetch failed for '%s'", query)
+        logger.exception("NewsAPI fetch failed for '%s'", params.get("q"))
         return []
+
+
+async def _fetch_news(
+    session: aiohttp.ClientSession,
+    city_name: str | None,
+    admin_region: str | None,
+) -> list[dict]:
+    api_key = os.environ.get("NEWSAPI_KEY", "")
+    if not api_key:
+        return []
+
+    # OR (not AND) so either name alone can match — admin_region is often an
+    # obscure/transliterated province name that rarely appears verbatim in a
+    # headline, but the city usually does.
+    terms = list(dict.fromkeys(t for t in (city_name, admin_region) if t))
+    if not terms:
+        return []
+    query = " OR ".join(f'"{t}"' for t in terms)
+    since = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    base_params = {
+        "q":        query,
+        "from":     since,
+        "sortBy":   "relevancy",
+        "pageSize": "5",
+        "apiKey":   api_key,
+        "searchIn": "title,description",
+    }
+
+    # Most surges cluster in non-English-speaking regions, so local coverage often
+    # only surfaces once the language filter is dropped. Try English first (cleaner
+    # input for the summarization prompt), and only retry without it when the first
+    # pass comes back empty — avoids doubling NewsAPI spend on every surge.
+    articles = await _query_newsapi(session, {**base_params, "language": "en"})
+    if not articles:
+        articles = await _query_newsapi(session, base_params)
+    return articles
 
 
 async def _generate_explanation(
     openai_client: AsyncOpenAI,
     surge: dict,
     headlines: list[dict],
+    city_name: str | None,
 ) -> str:
-    headlines_text = "\n".join(
-        f"- {h['title']}" for h in headlines
-    ) or "(no recent news found)"
-
     pct_building = float(surge.get("pct_building", 0)) * 100
     pct_highway  = float(surge.get("pct_highway", 0)) * 100
     magnitude    = float(surge.get("surge_magnitude", 0))
-    unique_users = surge.get("unique_users", "unknown")
+    try:
+        unique_users = int(surge.get("unique_users", 0))
+    except (TypeError, ValueError):
+        unique_users = 0
+
+    location = ", ".join(
+        part for part in (city_name, surge.get("admin_region"), surge.get("country_name")) if part
+    ) or "unknown"
+
+    if headlines:
+        headlines_text = "\n".join(f"- {h['title']}" for h in headlines)
+        news_section = f"Recent news headlines for this region:\n{headlines_text}"
+        news_instruction = (
+            "Ground your answer in these headlines only if they plausibly relate to this "
+            "location and time window. Ignore any that look unrelated."
+        )
+    else:
+        news_section = "No recent news headlines were found for this region."
+        news_instruction = (
+            "Since no news was found, do NOT invent a news-based scenario (no disaster, "
+            "election, or event you have no evidence for). Instead give the single most "
+            "likely explanation based only on the mapping stats below, and note that it's "
+            "inferred from edit activity alone, not confirmed by news."
+        )
 
     prompt = (
         f"A mapping surge was detected on OpenStreetMap.\n\n"
-        f"Location: {surge.get('admin_region')}, {surge.get('country_name')}\n"
+        f"Location: {location}\n"
         f"Time: {surge.get('detected_at')} IST\n"
         f"Edit volume: {magnitude:.1f}x above normal\n"
         f"Dominant edit type: {surge.get('dominant_tag')} "
         f"({pct_building:.0f}% buildings, {pct_highway:.0f}% roads)\n"
         f"Unique mappers: {unique_users}\n\n"
-        f"Recent news headlines for this region:\n{headlines_text}\n\n"
-        f"In one concise sentence, what might explain this mapping surge?"
+        f"{news_section}\n\n"
+        f"Heuristic: 1-2 unique mappers combined with a high building/road percentage "
+        f"usually indicates a bulk import or one dedicated mapper working alone, not an "
+        f"external event. Many unique mappers editing the same area at once usually "
+        f"indicates a coordinated mapathon, disaster-response effort, or a real-world "
+        f"event drawing local attention — use this to make a specific, confident call "
+        f"rather than a vague guess.\n\n"
+        f"{news_instruction}\n\n"
+        f"In one concise sentence, state the most likely explanation for this mapping surge."
     )
 
     try:
@@ -133,14 +200,16 @@ async def _enrich_surge(
 ) -> None:
     surge_id = surge.get("surge_id", "")
 
+    city_name = await _place_name_for_surge(surge)
+
     # The two external calls run under the semaphore; the local DB write doesn't.
     async with _API_SEMAPHORE:
         headlines = await _fetch_news(
             session,
-            surge.get("country_name"),
+            city_name,
             surge.get("admin_region"),
         )
-        explanation = await _generate_explanation(openai_client, surge, headlines)
+        explanation = await _generate_explanation(openai_client, surge, headlines, city_name)
 
     if surge_id:
         try:

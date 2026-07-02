@@ -31,7 +31,7 @@ OPENAI_API_KEY=<your key from platform.openai.com>
 ### 2. Create and activate the virtual environment
 
 ```powershell
-cd C:\Users\SAGNIK\Desktop\osm_surge\src
+cd path\to\osm_surge\src
 python -m venv osm
 .\osm\Scripts\activate
 ```
@@ -61,7 +61,7 @@ Verify: `docker exec osm-redis redis-cli ping` → should print `PONG`.
 Open **4 separate PowerShell terminals**. In each one:
 
 ```powershell
-cd C:\Users\SAGNIK\Desktop\osm_surge\src
+cd path\to\osm_surge\src
 .\osm\Scripts\activate
 ```
 
@@ -107,7 +107,7 @@ INFO  Starting all coroutines (start_id=$)
 The processor runs **8 async coroutines** and is intentionally quiet at INFO level once steady — *the absence of logs does not mean it's stuck.* Notes:
 - **Geocoder pre-warm (~30 s)** happens on startup before any coroutine runs; the first Parquet snapshot lands shortly after `Geocoder ready`.
 - `SURGE detected` (a WARNING) appears once baselines build (~7 days), or immediately via the cold-start fallback if a region spikes hard.
-- To confirm it's alive without logs, watch the snapshot files refresh: `ls C:\Users\SAGNIK\Desktop\osm_surge\data\api\` (timestamps update every ~60 s) or `docker exec osm-redis redis-cli XINFO GROUPS osm:raw` (entries-read climbs).
+- To confirm it's alive without logs, watch the snapshot files refresh: `ls path\to\osm_surge\data\api\` (timestamps update every ~60 s) or `docker exec osm-redis redis-cli XINFO GROUPS osm:raw` (entries-read climbs).
 
 ---
 
@@ -348,7 +348,7 @@ docker run -d -p 6379:6379 --name osm-redis redis:7   # if it doesn't exist yet
 
 You must run the API from `src/`, not from inside `src/api/`:
 ```powershell
-cd C:\Users\SAGNIK\Desktop\osm_surge\src
+cd path\to\osm_surge\src
 python -m api.main
 ```
 
@@ -356,7 +356,7 @@ python -m api.main
 
 The processor writes to `data/api/` relative to the repo root (two levels above `src/`). Check:
 ```powershell
-ls C:\Users\SAGNIK\Desktop\osm_surge\data\api\
+ls path\to\osm_surge\data\api\
 ```
 If the directory doesn't exist after 60s of the processor running, check the processor logs for snapshot errors.
 

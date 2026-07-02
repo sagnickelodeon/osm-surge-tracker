@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 import duckdb
+import pycountry
 import redis
 import reverse_geocoder as rg
 
@@ -12,8 +13,10 @@ from timeutil import now_ist
 
 logger = logging.getLogger(__name__)
 
-# ISO-3166 alpha-2 → country name for the ~50 most-edited OSM countries; unknown
-# codes fall back to the code itself.
+# ISO-3166 alpha-2 → country name for the ~50 most-edited OSM countries. Kept as an
+# explicit override (shorter, more colloquial names) for the common case; anything
+# not listed here falls back to pycountry's full ISO-3166 table (see
+# country_name_for_code below), so every country gets a real name, not just these.
 COUNTRY_NAMES: dict[str, str] = {
     "US": "United States",
     "DE": "Germany",
@@ -66,6 +69,18 @@ COUNTRY_NAMES: dict[str, str] = {
     "NZ": "New Zealand",
     "PT": "Portugal",
 }
+
+
+def country_name_for_code(cc: str | None) -> str | None:
+    """cc → country name: COUNTRY_NAMES override first, then full ISO-3166 lookup
+    via pycountry, then the raw code as a last resort (never returns None for a
+    truthy cc)."""
+    if not cc:
+        return None
+    if cc in COUNTRY_NAMES:
+        return COUNTRY_NAMES[cc]
+    country = pycountry.countries.get(alpha_2=cc)
+    return country.name if country else cc
 
 
 def deserialize_raw_fields(fields: dict[str, str]) -> dict[str, Any]:
@@ -132,7 +147,7 @@ async def _reverse_geocode_batch(
         cc = r.get("cc") or ""
         geo_results[event_idx] = {
             "country_code": cc or None,
-            "country_name": COUNTRY_NAMES.get(cc, cc) if cc else None,
+            "country_name": country_name_for_code(cc),
             "admin_region": r.get("admin1") or None,
             "place_name":   r.get("name") or None,
         }
