@@ -27,6 +27,10 @@ import HistoryTable from "@/components/HistoryTable";
 import Footer from "@/components/Footer";
 import TutorialModal from "@/components/TutorialModal";
 import FeedbackModal from "@/components/FeedbackModal";
+import WelcomeModal from "@/components/WelcomeModal";
+
+// Bump this key to re-show the intro to everyone (e.g. after a major UI change).
+const INTRO_SEEN_KEY = "osm_surge_seen_intro";
 
 // deck.gl + maplibre are browser-only; never server-render the map.
 const SurgeMap = dynamic(() => import("@/components/SurgeMap"), {
@@ -56,6 +60,7 @@ export default function DashboardPage() {
   const [lastUpdated, setLastUpdated] = useState<string>("—");
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
 
   const stats = useSWR("stats", fetchStats, {
     ...swrOpts,
@@ -77,6 +82,25 @@ export default function DashboardPage() {
     sessionStorage.setItem("tracked", "1");
     fetch("/api/track", { method: "POST", keepalive: true }).catch(() => {});
   }, []);
+
+  // First-visit orientation. Runs client-side only (no SSR hydration mismatch) and is
+  // wrapped in try/catch because localStorage throws in private/blocked-storage modes.
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(INTRO_SEEN_KEY)) setWelcomeOpen(true);
+    } catch {
+      /* storage unavailable — just skip the intro */
+    }
+  }, []);
+
+  const dismissWelcome = () => {
+    try {
+      localStorage.setItem(INTRO_SEEN_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    setWelcomeOpen(false);
+  };
 
   const apiDown =
     !!stats.error && !!surges.error && !!heatmap.error && !!history.error;
@@ -132,6 +156,14 @@ export default function DashboardPage() {
       </main>
 
       {/* Modals — rendered outside <main> so they overlay the whole page */}
+      <WelcomeModal
+        open={welcomeOpen}
+        onClose={dismissWelcome}
+        onTutorial={() => {
+          dismissWelcome();
+          setTutorialOpen(true);
+        }}
+      />
       <TutorialModal open={tutorialOpen} onClose={() => setTutorialOpen(false)} />
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </>

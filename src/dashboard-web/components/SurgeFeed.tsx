@@ -1,7 +1,7 @@
 /** Right-hand panel: the live surge feed. */
 
 import { Surge } from "@/lib/api";
-import { BORDER, COLOR_CRITICAL, MAP_HEIGHT, TEXT_DARK } from "@/lib/config";
+import { BORDER, COLOR_CRITICAL, MAP_HEIGHT, TEXT_DARK, TEXT_MID } from "@/lib/config";
 import SurgeCard from "./SurgeCard";
 
 export default function SurgeFeed({ surges }: { surges: Surge[] }) {
@@ -27,15 +27,25 @@ export default function SurgeFeed({ surges }: { surges: Surge[] }) {
       </div>
 
       {surges.length === 0 ? (
+        // A quiet feed is the common first-load state, so use it to teach rather than
+        // just report emptiness.
         <div
           style={{
             textAlign: "center",
             color: TEXT_DARK,
             fontSize: "0.8rem",
-            padding: "2rem 0",
+            padding: "2rem 0.75rem",
+            lineHeight: 1.6,
           }}
         >
-          No active surges detected
+          <div style={{ fontSize: "1.4rem", marginBottom: "0.5rem" }}>🌍</div>
+          <div style={{ color: TEXT_MID, marginBottom: "0.35rem" }}>
+            No active surges right now
+          </div>
+          <div style={{ fontSize: "0.72rem" }}>
+            When volunteers suddenly flood a region with map edits — after a flood,
+            an earthquake, or a coordinated mapathon — it will appear here.
+          </div>
         </div>
       ) : (
         <div style={{ flex: 1, overflowY: "auto", paddingRight: "0.25rem" }}>

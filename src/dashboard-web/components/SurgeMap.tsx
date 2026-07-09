@@ -27,6 +27,7 @@ import {
   TEXT_MID,
 } from "@/lib/config";
 import { countryName } from "@/lib/countries";
+import MapLegend from "./MapLegend";
 
 interface SurgePoint extends Surge {
   _color: [number, number, number, number];
@@ -117,6 +118,7 @@ export default function SurgeMap({
       >
         <Map reuseMaps mapStyle={MAP_STYLE} />
       </DeckGL>
+      <MapLegend />
     </div>
   );
 }

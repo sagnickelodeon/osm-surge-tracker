@@ -11,6 +11,7 @@ import { Surge } from "@/lib/api";
 import { BORDER, CARD_BG, severity, TEXT_DARK, TEXT_MID } from "@/lib/config";
 import { minsAgo } from "@/lib/time";
 import { countryName } from "@/lib/countries";
+import InfoTip from "./InfoTip";
 
 export default function SurgeCard({ surge }: { surge: Surge }) {
   const [open, setOpen] = useState(false);
@@ -58,11 +59,28 @@ export default function SurgeCard({ surge }: { surge: Surge }) {
           {magnitude.toFixed(1)}×
           <span style={{ fontSize: "0.75rem", fontWeight: 400, color: TEXT_MID }}>
             {" "}
-            normal · {editCount} edits
+            normal
+            <InfoTip term="magnitude">
+              How many times the region&apos;s normal edit volume this surge reached. 12×
+              means twelve times its usual activity for this hour of day.
+            </InfoTip>{" "}
+            · {editCount} edits
           </span>
         </div>
-        <div style={{ fontSize: "0.7rem", color: TEXT_DARK }}>
-          {timeDisplay} · {tag} · {zDisplay}
+        <div style={{ fontSize: "0.7rem", color: TEXT_DARK, display: "flex", alignItems: "center", flexWrap: "wrap" }}>
+          <span>{timeDisplay}</span>
+          <span style={{ margin: "0 0.3rem" }}>·</span>
+          <span>{tag}</span>
+          <InfoTip term="the dominant tag">
+            The most common type of map feature being edited in this surge — for example
+            BUILDING, HIGHWAY, or AMENITY.
+          </InfoTip>
+          <span style={{ margin: "0 0.3rem" }}>·</span>
+          <span>{zDisplay}</span>
+          <InfoTip term="z-score">
+            How many standard deviations above the region&apos;s own historical baseline
+            this spike is. N/A means the baseline is still warming up for that region.
+          </InfoTip>
         </div>
       </div>
 
