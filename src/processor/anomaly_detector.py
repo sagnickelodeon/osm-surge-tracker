@@ -11,9 +11,9 @@ from db import get_baseline, get_global_95th_percentile
 from enricher import country_name_for_code
 from timeutil import now_ist
 
-ZSCORE_THRESHOLD    = 3.0
-MAGNITUDE_THRESHOLD = 5.0
-MIN_EDIT_COUNT      = 20
+ZSCORE_THRESHOLD    = 4.0
+MAGNITUDE_THRESHOLD = 10.0
+MIN_EDIT_COUNT      = 1000
 BASELINE_MIN_SAMPLES = 10
 
 STREAM_SURGES     = "osm:surges"
@@ -56,7 +56,7 @@ def _detect_surge(
         baseline_mean = p95
         z_score = -1.0  # sentinel — not a real z-score
         surge_magnitude = edit_count / max(p95, 1.0)
-        is_surge = edit_count > p95 * 2 and edit_count > MIN_EDIT_COUNT
+        is_surge = edit_count > p95 * 2 and edit_count > MIN_EDIT_COUNT and surge_magnitude > MAGNITUDE_THRESHOLD
 
     if not is_surge:
         return False
