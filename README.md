@@ -36,7 +36,7 @@ planet.openstreetmap.org
 │ 1. Poller    │ ───────────────▶ │ 2. Stream Processor (async) │
 │   (requests) │     osm:raw      │   Bronze → Silver → Gold    │
 └──────────────┘                  │   z-score anomaly detection │
-                                  │   NewsAPI + OpenAI enrich   │
+                                  │   GDELT + OpenAI enrich     │
                                   └──────────────┬──────────────┘
                                    DuckDB         │ Parquet snapshots (60s)
                                    warehouse      ▼
@@ -64,13 +64,14 @@ planet.openstreetmap.org
 
 ### Surge detection
 
-A region is flagged only when **all three** conditions hold simultaneously (tuned to suppress false positives):
+A region is flagged only when **all** conditions hold simultaneously (tuned to suppress false positives):
 
-- `z_score > 3.0` — statistically unusual vs. the region's baseline for that hour of day
-- `surge_magnitude > 5.0` — at least 5× its normal edit volume
-- `edit_count > 20` — enough absolute volume to matter
+- `unique_users >= 3` — multiple independent mappers, not a single-account bulk import
+- `z_score > 4.0` — statistically unusual vs. the region's baseline for that hour of day
+- `surge_magnitude > 10.0` — at least 10× its normal edit volume
+- `edit_count > 1000` — enough absolute volume to matter
 
-A cold-start fallback (first 7 days, before baselines exist) flags regions exceeding **2× the global 95th percentile**.
+A cold-start fallback (before baselines exist) flags regions exceeding **2× the global 95th percentile** (with the same `edit_count`, `surge_magnitude`, and `unique_users` floors).
 
 ---
 
@@ -82,7 +83,7 @@ A cold-start fallback (first 7 days, before baselines exist) flags regions excee
 | Ingestion | `requests`, `pyosmium`, Redis Streams |
 | Stream processing | `asyncio`, `reverse_geocoder` |
 | Warehouse | **DuckDB** (embedded OLAP) + Parquet |
-| Enrichment | NewsAPI + OpenAI (`gpt-4o-mini`) |
+| Enrichment | GDELT Cloud Events API + OpenAI (`gpt-4o-mini`) |
 | API | **FastAPI** + Uvicorn + Pydantic v2 |
 | Dashboard | **Next.js** (React, TypeScript) + **deck.gl** + **MapLibre** (token-free Carto dark basemap) |
 | Hosting | Azure B1ms VM (1–3a) · Vercel (3b) |
@@ -129,7 +130,7 @@ source osm/bin/activate              # Windows: .\osm\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Optionally copy/fill `secret.env` (`NEWSAPI_KEY`, `OPENAI_API_KEY` — both optional;
+Optionally copy/fill `secret.env` (`GDELT_API_KEY`, `OPENAI_API_KEY` — both optional;
 without them, surges are still recorded, just with no news/explanation). Every
 component auto-loads `secret.env`, so no manual environment exports are needed.
 
@@ -165,7 +166,7 @@ troubleshooting).
 |---|---|---|---|
 | `REDIS_HOST` / `REDIS_PORT` | poller, processor | `localhost` / `6379` | Redis location |
 | `PROCESSOR_START_ID` | processor | `$` | `$` = new messages only; `0` = replay backlog |
-| `NEWSAPI_KEY` | processor | — | enables news headlines (optional) |
+| `GDELT_API_KEY` | processor | — | enables news via GDELT Cloud Events API (optional) |
 | `OPENAI_API_KEY` | processor | — | enables AI explanations (optional) |
 | `API_PARQUET_DIR` | api | `<repo>/data/api` | where to read Parquet snapshots |
 | `AZURE_STORAGE_CONNECTION_STRING` | processor, api | — | enables the silver/gold archive + hourly visitor log (optional) |
@@ -201,13 +202,13 @@ All endpoints return empty lists/objects rather than errors on missing data, so 
 **Why Parquet snapshots between the processor and the API?**
 DuckDB allows only one process to hold a database file open read-write. The processor keeps that lock for life, so the API (a separate process) cannot open the same file — *not even read-only*. The processor therefore exports the API's tables to Parquet every 60 s, and the API queries those files through its own in-memory DuckDB connection: no lock contention, multiple readers, always fresh. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full reasoning.
 
-**Resilience.** Every long-running loop is wrapped in `while True: try/except`, so a transient failure restarts one coroutine without taking down the rest. Redis consumer groups give at-least-once delivery (messages are ACKed only after a confirmed DuckDB write). The CPU-bound geocoder runs via `asyncio.to_thread` so it can't stall the event loop, and the explainer caps concurrent NewsAPI/OpenAI calls with a semaphore so a surge burst can't self-DoS into timeouts. The dashboard degrades gracefully — an unreachable API shows a banner, not a stack trace.
+**Resilience.** Every long-running loop is wrapped in `while True: try/except`, so a transient failure restarts one coroutine without taking down the rest. Redis consumer groups give at-least-once delivery (messages are ACKed only after a confirmed DuckDB write). The CPU-bound geocoder runs via `asyncio.to_thread` so it can't stall the event loop, and the explainer caps concurrent GDELT/OpenAI calls with a semaphore so a surge burst can't self-DoS into timeouts. The dashboard degrades gracefully — an unreachable API shows a banner, not a stack trace.
 
 **Timezone (IST).** Every timestamp stored in DuckDB is a naive datetime in **IST (UTC+5:30)** wall-clock, written via `now_ist()` so it's correct regardless of host timezone. Filters compare against an IST "now", and the API serialises with the `+05:30` offset so the dashboard shows correct local times. (The raw OSM edit timestamp stays UTC — it's authoritative upstream data.)
 
 **Cloud archive & visitor logging (optional, Azure Blob).** Set `AZURE_STORAGE_CONNECTION_STRING` + `AZURE_BLOB_CONTAINER` and two extra writers switch on, both best-effort and disabled when unset. The processor archives the silver and gold layers hourly as a time-partitioned history (`silver/dt=YYYY-MM-DD/HH.parquet`, `gold/dt=…`), and the API flushes one JSON summary line per hour to `logs/visits-YYYY-MM-DD.log` — `unique_visitors` (distinct IPs) for "how many people", plus each visitor's IP + user-agent. The dashboard fires a one-shot beacon per page load and its proxy forwards the **real** client IP via `X-Forwarded-For`; without a login, IP + user-agent is the most identity that can be captured. Azure credentials live only on the VM, never on Vercel.
 
-**Security posture.** The API serves public, read-only data; all user-supplied query parameters are bound (`?`) and clamped by FastAPI validation — never string-interpolated into SQL. No secrets are hardcoded (NewsAPI/OpenAI keys come from the environment). Because the API runs without a reverse proxy, access is gated in-app: a central middleware (`api/auth.py`) requires the shared `TRACK_SECRET` (sent by the dashboard proxy as `x-track-secret`) on **every** endpoint except `/health`, so the API is reachable only through the dashboard proxy — a client hitting `:8000` directly is refused with a 404. `POST /track` is additionally rate-limited (60/min per IP). Setting `TRACK_SECRET` locks the API down; leaving it unset opens all endpoints for local dev. This open state is **fail-closed in production**: with `APP_ENV=production` the API refuses to start unless `TRACK_SECRET` is set (it raises before uvicorn binds), so a public deployment can never come up with the gate silently disabled; `APP_ENV` defaults to `development`, where an open API is intentional. Optionally terminate TLS in uvicorn (see `DEPLOYMENT.md`) and restrict the VM port via the Azure NSG.
+**Security posture.** The API serves public, read-only data; all user-supplied query parameters are bound (`?`) and clamped by FastAPI validation — never string-interpolated into SQL. No secrets are hardcoded (GDELT/OpenAI keys come from the environment). Because the API runs without a reverse proxy, access is gated in-app: a central middleware (`api/auth.py`) requires the shared `TRACK_SECRET` (sent by the dashboard proxy as `x-track-secret`) on **every** endpoint except `/health`, so the API is reachable only through the dashboard proxy — a client hitting `:8000` directly is refused with a 404. `POST /track` is additionally rate-limited (60/min per IP). Setting `TRACK_SECRET` locks the API down; leaving it unset opens all endpoints for local dev. This open state is **fail-closed in production**: with `APP_ENV=production` the API refuses to start unless `TRACK_SECRET` is set (it raises before uvicorn binds), so a public deployment can never come up with the gate silently disabled; `APP_ENV` defaults to `development`, where an open API is intentional. Optionally terminate TLS in uvicorn (see `DEPLOYMENT.md`) and restrict the VM port via the Azure NSG.
 
 ---
 

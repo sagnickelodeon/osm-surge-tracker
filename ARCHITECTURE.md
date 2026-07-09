@@ -342,25 +342,32 @@ Receives batches of silver records from `anomaly_queue` (put there by `flush_win
 
 **`_detect_surge(conn, redis_client, silver_record)`:**
 
+**Precondition (both paths):** `unique_users >= 3` (`MIN_UNIQUE_USERS`). The data showed
+most high-volume windows are a single/paired account doing thousands of edits — a bulk
+import or a lone mapper, not a newsworthy event — so windows with fewer than 3 distinct
+mappers are never counted as surges (not written to gold at all).
+
 **Normal path** (baseline has ≥ 10 samples):
 ```
 z_score       = (edit_count − baseline_mean) / max(baseline_std, 1.0)
 surge_magnitude = edit_count / max(baseline_mean, 1.0)
-is_surge      = z_score > 3.0
-              AND surge_magnitude > 5.0
-              AND edit_count > 20
+is_surge      = z_score > 4.0
+              AND surge_magnitude > 10.0
+              AND edit_count > 1000
 ```
 
-Three conditions are required simultaneously to prevent false positives:
-- `z_score > 3.0` — statistically unusual (1-in-1000 under a normal distribution)
-- `surge_magnitude > 5.0` — at least 5× above baseline volume
-- `edit_count > 20` — filters out tiny regions where 3 edits could pass the other two tests
+Conditions required simultaneously to prevent false positives:
+- `unique_users >= 3` (`MIN_UNIQUE_USERS`) — excludes single-account bulk imports
+- `z_score > 4.0` (`ZSCORE_THRESHOLD`) — statistically unusual
+- `surge_magnitude > 10.0` (`MAGNITUDE_THRESHOLD`) — at least 10× above baseline volume
+- `edit_count > 1000` (`MIN_EDIT_COUNT`) — a real, baseline-independent absolute floor
 
-**Cold-start path** (baseline missing or fewer than 10 samples — first 7 days of data):
+**Cold-start path** (baseline missing or fewer than 10 samples):
 ```
-is_surge = edit_count > global_p95 × 2  AND  edit_count > 20
+is_surge = edit_count > global_p95 × 2  AND  edit_count > 1000  AND  surge_magnitude > 10.0
 ```
-`z_score` is set to `-1.0` as a sentinel so downstream code can tell this was a cold-start detection.
+(the `unique_users >= 3` precondition applies here too). `z_score` is set to `-1.0` as a
+sentinel so downstream code can tell this was a cold-start detection.
 
 **On surge:**
 1. INSERT into `gold_surges` with `detected_at = now_ist()` (naive IST), `status="active"`, blank `explanation`, empty `news_headlines`
@@ -370,19 +377,25 @@ Null-coord buckets (`country_code=None`) are skipped — they have no geographic
 
 ---
 
-#### `explainer.py` — NewsAPI + OpenAI enrichment
+#### `explainer.py` — GDELT + OpenAI enrichment
 
 Reads from `osm:surges` using its own consumer group (`explainer-group`). Creates one `aiohttp.ClientSession` and one `openai.AsyncOpenAI` instance for the lifetime of the process. The OpenAI client is built with an explicit `timeout=30.0` and `max_retries=2`.
 
-**Concurrency cap.** A window flush can emit many surges at once. Firing a NewsAPI + OpenAI call for each one concurrently created a thundering herd that exhausted connections and timed out, so a module-level `asyncio.Semaphore(3)` limits the external API calls to **3 surges in flight at a time**; the DuckDB write and ACK happen outside the semaphore.
+News comes from the **GDELT Cloud Events API** (`gdeltcloud.com/api/v2/events`). Every event is geolocated, so we query by the surge **centroid** (`near` + `radius_km`) over the surge's date window and read the source articles GDELT links to each event — a much better geographic fit than free-text search for a localized mapping surge. Requires an API key in the **`GDELT_API_KEY`** env var (sign up at gdeltcloud.com); if unset, surges are still recorded, just without news.
 
-**`_fetch_news(session, country_name, admin_region)`** — async GET to `newsapi.org/v2/everything` (20 s timeout). Query is `"{admin_region} {country_name}"`, `sortBy=relevancy`, `pageSize=3`, `from=now-48h`. Returns `[{title, url, publishedAt}]` or `[]` on any failure. A module-level daily counter (reset at midnight UTC) stops requests after 80/day to stay within the free tier's 100-request cap.
+**Concurrency cap.** A window flush can emit several surges at once. Firing a GDELT + OpenAI call for each concurrently created a thundering herd that exhausted connections and timed out, so a module-level `asyncio.Semaphore(3)` limits the external API calls to **3 surges in flight at a time**; the DuckDB write and ACK happen outside the semaphore.
+
+**GDELT pacer.** GDELT Cloud enforces plan-based quotas (HTTP 429 `RATE_LIMITED`). A dedicated module-level `asyncio.Lock` (`_GDELT_LOCK`) plus a `time.monotonic()` timestamp serialises GDELT calls and spaces them ≥ `GDELT_MIN_INTERVAL` (1 s) apart, independent of the OpenAI semaphore, to avoid bursting the quota.
+
+**`_fetch_news(session, surge)`** — reads `GDELT_API_KEY` (returns `[]` if unset), parses the surge centroid, derives the date window (`_date_window`: the surge day and the 2 days before), and calls `_query_events`.
+
+**`_query_events(session, api_key, lat, lon, date_start, date_end)`** — async GET to the Events endpoint with `Authorization: Bearer <key>` and params `near=lat,lon`, `radius_km=50`, `date_start`, `date_end`, `sort=recent`, `limit=5` (30 s timeout), run under the pacer lock. Parses defensively (non-200 / non-JSON → `[]`). Walks each event's `top_articles` and maps them to `{title, url, publishedAt}` (from `article_date`), deduped by URL and capped at 5 — the **same shape** stored in `news_headlines`, so nothing downstream (`api/models.py`, the dashboard) changes.
 
 **`_generate_explanation(openai_client, surge_data, headlines)`** — builds a prompt with the surge's location, time, magnitude, tag breakdown, and the news headlines. Calls `gpt-4o-mini` with `max_tokens=100`. Returns the response string, or `""` on failure.
 
-**`_enrich_surge`** — runs the two external calls under the shared semaphore, then `UPDATE gold_surges SET explanation=?, news_headlines=? WHERE surge_id=?`. The Redis `XACK` fires only after the DuckDB update succeeds. If NewsAPI or OpenAI fail, the surge stays in the gold table with empty fields — it is never lost.
+**`_enrich_surge`** — runs the two external calls under the shared semaphore, then `UPDATE gold_surges SET explanation=?, news_headlines=? WHERE surge_id=?`. The Redis `XACK` fires only after the DuckDB update succeeds. If GDELT or OpenAI fail, the surge stays in the gold table with empty fields — it is never lost.
 
-All three operations (NewsAPI, OpenAI, DuckDB) are wrapped in separate `try/except` blocks so a failure in one does not prevent the others.
+All three operations (GDELT, OpenAI, DuckDB) are wrapped in separate `try/except` blocks so a failure in one does not prevent the others.
 
 ---
 
@@ -476,7 +489,7 @@ wrapped in try/except, so an Azure outage never disrupts the live pipeline.
 | `REDIS_HOST` | `localhost` | Redis address |
 | `REDIS_PORT` | `6379` | Redis port |
 | `PROCESSOR_START_ID` | `$` | `$` = only new messages; `0` = replay entire backlog |
-| `NEWSAPI_KEY` | — | NewsAPI free-tier key; omit to skip news enrichment |
+| `GDELT_API_KEY` | — | GDELT Cloud API key (Events endpoint); omit to skip news enrichment |
 | `OPENAI_API_KEY` | — | OpenAI key; omit to skip LLM explanation |
 | `AZURE_STORAGE_CONNECTION_STRING` | — | Storage account connection string; omit to disable the blob archive |
 | `AZURE_BLOB_CONTAINER` | — | Target container name; omit to disable the blob archive |
@@ -732,7 +745,7 @@ source osm/bin/activate              # Linux / Azure VM
 # install all deps at once (combined manifest at src/requirements.txt)
 pip install -r requirements.txt
 
-# optional: copy secret.env and fill in keys (NEWSAPI_KEY, OPENAI_API_KEY).
+# optional: copy secret.env and fill in keys (GDELT_API_KEY for news, OPENAI_API_KEY for explanations).
 # Each entry point auto-loads ../secret.env via python-dotenv, so no manual exports.
 
 # terminal 1 — poller (Component 1)

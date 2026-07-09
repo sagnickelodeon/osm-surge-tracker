@@ -14,6 +14,7 @@ from timeutil import now_ist
 ZSCORE_THRESHOLD    = 4.0
 MAGNITUDE_THRESHOLD = 10.0
 MIN_EDIT_COUNT      = 1000
+MIN_UNIQUE_USERS    = 3     # require ≥3 independent mappers — see note in _detect_surge
 BASELINE_MIN_SAMPLES = 10
 
 STREAM_SURGES     = "osm:surges"
@@ -30,9 +31,18 @@ def _detect_surge(
     country_code = silver.get("country_code")
     admin_region = silver.get("admin_region")
     edit_count   = silver["edit_count"]
+    unique_users = silver.get("unique_users", 0)
 
     # Skip null-coord bucket (no geographic identity)
     if not country_code or not admin_region:
+        return False
+
+    # Require multiple independent mappers. The data shows that most high-volume windows
+    # are a single (or paired) account doing thousands of edits — i.e. a bulk import or a
+    # lone mapper, not a newsworthy event. Excluding them here means such imports are never
+    # counted as surges at all (not written to gold), so only coordinated, multi-mapper
+    # activity — the kind a real-world event produces — is surfaced.
+    if unique_users < MIN_UNIQUE_USERS:
         return False
 
     window_start: datetime = silver["window_start"]

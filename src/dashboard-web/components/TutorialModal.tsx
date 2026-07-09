@@ -167,9 +167,8 @@ export default function TutorialModal({
               <div>
                 <Tag color={COLOR_ELEVATED} label="ELEVATED" />
                 <span>
-                  The baseline threshold is ≥ 5× once a region has enough history. During
-                  the first 7 days (cold-start), the system uses a global fallback and can
-                  flag surges at lower magnitudes — those cards show <strong style={{ color: "#FFFFFF" }}>z = N/A</strong>.
+                  Gold — the lowest severity tier. Because the detector&apos;s magnitude
+                  floor is 10×, confirmed surges normally appear as HIGH or CRITICAL.
                 </span>
               </div>
             </Row>
@@ -218,7 +217,7 @@ export default function TutorialModal({
           <p style={{ margin: "0 0 0.75rem" }}>
             The processor aggregates OSM edits into 5-minute windows per region. A
             region is flagged as a surge only when{" "}
-            <strong style={{ color: "#FFFFFF" }}>all three</strong> conditions hold
+            <strong style={{ color: "#FFFFFF" }}>all four</strong> conditions hold
             simultaneously (to suppress false positives):
           </p>
           <div
@@ -233,9 +232,10 @@ export default function TutorialModal({
             }}
           >
             {[
-              ["z-score > 3.0", "Statistically unusual vs. the region's rolling 7-day, hour-of-day baseline"],
-              ["Magnitude > 5×", "At least 5× the region's normal edit volume for that hour"],
-              ["Edit count > 20", "Enough absolute activity to rule out tiny quiet regions"],
+              ["Unique mappers ≥ 3", "Multiple independent editors — excludes single-account bulk imports"],
+              ["z-score > 4.0", "Statistically unusual vs. the region's rolling 7-day, hour-of-day baseline"],
+              ["Magnitude > 10×", "At least 10× the region's normal edit volume for that hour"],
+              ["Edit count > 1000", "Enough absolute activity to matter"],
             ].map(([stat, desc]) => (
               <div key={stat} style={{ display: "flex", gap: "0.75rem" }}>
                 <span
@@ -254,8 +254,9 @@ export default function TutorialModal({
             ))}
           </div>
           <p style={{ margin: "0.75rem 0 0", color: TEXT_MID, fontSize: "0.78rem" }}>
-            During the first 7 days (before baselines exist), the system falls back to
-            flagging regions that exceed 2× the global 95th-percentile edit count.
+            Before a region has a baseline, the system falls back to flagging regions that
+            exceed 2× the global 95th-percentile edit count (while still meeting the
+            magnitude, edit-count, and unique-mapper floors above).
           </p>
         </Section>
 

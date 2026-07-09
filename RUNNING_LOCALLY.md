@@ -18,7 +18,7 @@
 Edit `src/secret.env` — the only two values that matter are the API keys, and **both are optional**. Without them the system runs fine; surges are just recorded with no news headlines / no AI explanation.
 
 ```
-NEWSAPI_KEY=<your key from newsapi.org — free tier is fine>
+GDELT_API_KEY=<your key from gdeltcloud.com — enables news via the Events API>
 OPENAI_API_KEY=<your key from platform.openai.com>
 ```
 
@@ -328,7 +328,7 @@ az storage blob list --connection-string "<your connection string>" --container-
 
 ## Troubleshooting
 
-**`OPENAI_API_KEY` / `NEWSAPI_KEY` missing warning**
+**`OPENAI_API_KEY` / `GDELT_API_KEY` missing warning**
 
 The entry points auto-load `secret.env` at startup. If you still see this warning, check:
 1. The keys are actually set (not left as `your_openai_api_key_here`) in `src/secret.env`

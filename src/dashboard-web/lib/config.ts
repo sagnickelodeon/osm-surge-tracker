@@ -8,7 +8,7 @@ export const REFRESH_INTERVAL_MS = 60_000;
 // Severity colours (match the surge-magnitude thresholds used by the detector).
 export const COLOR_CRITICAL = "#FF4B4B"; // surge_magnitude >= 15
 export const COLOR_HIGH = "#FFA500"; // surge_magnitude >= 8
-export const COLOR_ELEVATED = "#FFD700"; // surge_magnitude >= 5 (all confirmed surges)
+export const COLOR_ELEVATED = "#FFD700"; // surge_magnitude < 8 (detector floor is 10×, so rarely shown)
 
 // Card surfaces
 export const CARD_BG = "#13161C";

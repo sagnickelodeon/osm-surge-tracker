@@ -2,7 +2,8 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+import time
+from datetime import datetime, timedelta
 
 import aiohttp
 import duckdb
@@ -17,41 +18,35 @@ from redis_consumer import (
     read_messages,
 )
 
-NEWSAPI_URL     = "https://newsapi.org/v2/everything"
-CONSUMER_NAME   = "explainer-1"
-NEWSAPI_MAX_DAY = 80  # leave buffer below the 100 req/day free tier limit
+# News comes from the GDELT Cloud Events API (gdeltcloud.com/api/v2/events). Each event
+# is geolocated, so we query by the surge centroid (near + radius) over the surge's date
+# window and read the source articles GDELT links to each event. Requires an API key in
+# the GDELT_API_KEY env var; if unset, surges are still recorded, just without news.
+GDELT_EVENTS_URL    = "https://gdeltcloud.com/api/v2/events"
+GDELT_RADIUS_KM     = 50       # proximity around the surge centroid (surges are local)
+GDELT_MAX_RECORDS   = 5
+GDELT_LOOKBACK_DAYS = 2        # news window: the surge day and the ~2 days before it
+GDELT_MIN_INTERVAL  = 1.0      # courtesy spacing (s) between GDELT Cloud requests
+CONSUMER_NAME       = "explainer-1"
 
 logger = logging.getLogger(__name__)
 
-# Cap concurrent external calls: a window flush can emit many surges at once, and
-# firing NewsAPI + OpenAI for all of them would exhaust connections and time out.
+# Cap concurrent external calls: a window flush can emit several surges at once, and
+# firing GDELT + OpenAI for all of them would exhaust connections and time out.
 _API_SEMAPHORE = asyncio.Semaphore(3)
 
-# Daily NewsAPI request counter — reset at midnight UTC
-_newsapi_date: str = ""
-_newsapi_count: int = 0
-
-
-def _newsapi_allowed() -> bool:
-    global _newsapi_date, _newsapi_count
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    if today != _newsapi_date:
-        _newsapi_date = today
-        _newsapi_count = 0
-    return _newsapi_count < NEWSAPI_MAX_DAY
-
-
-def _newsapi_tick() -> None:
-    global _newsapi_count
-    _newsapi_count += 1
+# GDELT Cloud enforces plan-based quotas (HTTP 429 `RATE_LIMITED`). A dedicated lock plus
+# a monotonic timestamp serialise GDELT calls and space them at least GDELT_MIN_INTERVAL
+# apart, independent of the OpenAI semaphore, to avoid bursting the quota.
+_GDELT_LOCK = asyncio.Lock()
+_gdelt_last_ts: float = 0.0   # time.monotonic() of the last GDELT request
 
 
 async def _place_name_for_surge(surge: dict) -> str | None:
-    """Reverse-geocode the surge centroid to a city/place name. Silver records only
-    carry country_code/admin_region (a province-level name that rarely appears
-    verbatim in headlines) — the centroid lets us recover a more newsworthy city
-    name for the NewsAPI query, same as enricher's per-edit geocoding but for a
-    single point."""
+    """Reverse-geocode the surge centroid to a city/place name for the explanation
+    prompt's location string. Silver records only carry country_code/admin_region (a
+    province-level name); the centroid recovers a more specific city name, same as
+    enricher's per-edit geocoding but for a single point."""
     try:
         lat = float(surge.get("centroid_lat") or "")
         lon = float(surge.get("centroid_lon") or "")
@@ -68,61 +63,103 @@ async def _place_name_for_surge(surge: dict) -> str | None:
         return None
 
 
-async def _query_newsapi(session: aiohttp.ClientSession, params: dict) -> list[dict]:
-    if not _newsapi_allowed():
-        logger.warning("NewsAPI daily limit reached — skipping news fetch")
+def _date_window(surge: dict) -> tuple[str, str]:
+    """Calendar date window (YYYY-MM-DD) for the Events query: the surge day and the
+    GDELT_LOOKBACK_DAYS before it. Only the calendar date of the surge's IST timestamp is
+    used, so the timezone offset is irrelevant."""
+    stamp = (surge.get("detected_at") or surge.get("window_start") or "")[:10]
+    try:
+        end = datetime.strptime(stamp, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        end = datetime.now().date()
+    start = end - timedelta(days=GDELT_LOOKBACK_DAYS)
+    return start.isoformat(), end.isoformat()
+
+
+async def _query_events(
+    session: aiohttp.ClientSession,
+    api_key: str,
+    lat: float,
+    lon: float,
+    date_start: str,
+    date_end: str,
+) -> list[dict]:
+    """Query the GDELT Cloud Events API for events near the surge centroid and return
+    their source articles as {title, url, publishedAt} — the shape stored in
+    news_headlines. Returns [] on any error (auth, quota/429, non-JSON, network)."""
+    global _gdelt_last_ts
+
+    params = {
+        "near":       f"{lat},{lon}",
+        "radius_km":  str(GDELT_RADIUS_KM),
+        "date_start": date_start,
+        "date_end":   date_end,
+        "sort":       "recent",
+        "limit":      str(GDELT_MAX_RECORDS),
+    }
+    headers = {"Authorization": f"Bearer {api_key}"}
+
+    # Serialise + space requests under the pacer lock (held across the request so two
+    # surges can never overlap a GDELT call).
+    async with _GDELT_LOCK:
+        wait = GDELT_MIN_INTERVAL - (time.monotonic() - _gdelt_last_ts)
+        if wait > 0:
+            await asyncio.sleep(wait)
+        try:
+            async with session.get(
+                GDELT_EVENTS_URL,
+                params=params,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as resp:
+                status = resp.status
+                body = await resp.text()
+        except Exception:
+            logger.exception("GDELT Events request failed near %s,%s", lat, lon)
+            return []
+        finally:
+            _gdelt_last_ts = time.monotonic()
+
+    if status != 200:
+        logger.warning("GDELT Events returned HTTP %d near %s,%s: %.80s", status, lat, lon, body)
         return []
 
     try:
-        _newsapi_tick()
-        async with session.get(NEWSAPI_URL, params=params, timeout=aiohttp.ClientTimeout(total=20)) as resp:
-            data = await resp.json()
-        articles = data.get("articles") or []
-        return [
-            {"title": a.get("title"), "url": a.get("url"), "publishedAt": a.get("publishedAt")}
-            for a in articles
-            if a.get("title")
-        ]
-    except Exception:
-        logger.exception("NewsAPI fetch failed for '%s'", params.get("q"))
+        data = json.loads(body)
+    except (ValueError, TypeError):
+        logger.warning("GDELT Events returned non-JSON near %s,%s: %.80s", lat, lon, body)
         return []
 
+    out: list[dict] = []
+    seen: set[str] = set()
+    for event in (data.get("data") or []):
+        for article in (event.get("top_articles") or []):
+            url = article.get("url")
+            title = article.get("title")
+            if title and url and url not in seen:
+                seen.add(url)
+                out.append({"title": title, "url": url, "publishedAt": article.get("article_date")})
+                if len(out) >= GDELT_MAX_RECORDS:
+                    return out
+    return out
 
-async def _fetch_news(
-    session: aiohttp.ClientSession,
-    city_name: str | None,
-    admin_region: str | None,
-) -> list[dict]:
-    api_key = os.environ.get("NEWSAPI_KEY", "")
+
+async def _fetch_news(session: aiohttp.ClientSession, surge: dict) -> list[dict]:
+    """Find recent news for a surge via the GDELT Cloud Events API, keyed on the surge
+    centroid (near/radius) and its date window. Needs GDELT_API_KEY; returns [] if the
+    key is unset or the centroid is missing/invalid."""
+    api_key = os.environ.get("GDELT_API_KEY", "")
     if not api_key:
         return []
-
-    # OR (not AND) so either name alone can match — admin_region is often an
-    # obscure/transliterated province name that rarely appears verbatim in a
-    # headline, but the city usually does.
-    terms = list(dict.fromkeys(t for t in (city_name, admin_region) if t))
-    if not terms:
+    try:
+        lat = float(surge.get("centroid_lat") or "")
+        lon = float(surge.get("centroid_lon") or "")
+    except (TypeError, ValueError):
         return []
-    query = " OR ".join(f'"{t}"' for t in terms)
-    since = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    base_params = {
-        "q":        query,
-        "from":     since,
-        "sortBy":   "relevancy",
-        "pageSize": "5",
-        "apiKey":   api_key,
-        "searchIn": "title,description",
-    }
-
-    # Most surges cluster in non-English-speaking regions, so local coverage often
-    # only surfaces once the language filter is dropped. Try English first (cleaner
-    # input for the summarization prompt), and only retry without it when the first
-    # pass comes back empty — avoids doubling NewsAPI spend on every surge.
-    articles = await _query_newsapi(session, {**base_params, "language": "en"})
-    if not articles:
-        articles = await _query_newsapi(session, base_params)
-    return articles
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        return []
+    date_start, date_end = _date_window(surge)
+    return await _query_events(session, api_key, lat, lon, date_start, date_end)
 
 
 async def _generate_explanation(
@@ -168,8 +205,8 @@ async def _generate_explanation(
         f"({pct_building:.0f}% buildings, {pct_highway:.0f}% roads)\n"
         f"Unique mappers: {unique_users}\n\n"
         f"{news_section}\n\n"
-        f"Heuristic: 1-2 unique mappers combined with a high building/road percentage "
-        f"usually indicates a bulk import or one dedicated mapper working alone, not an "
+        f"Heuristic: 2-3 unique mappers combined with a high building/road percentage "
+        f"usually indicates a bulk import or few dedicated mapper working alone, not an "
         f"external event. Many unique mappers editing the same area at once usually "
         f"indicates a coordinated mapathon, disaster-response effort, or a real-world "
         f"event drawing local attention — use this to make a specific, confident call "
@@ -204,11 +241,7 @@ async def _enrich_surge(
 
     # The two external calls run under the semaphore; the local DB write doesn't.
     async with _API_SEMAPHORE:
-        headlines = await _fetch_news(
-            session,
-            city_name,
-            surge.get("admin_region"),
-        )
+        headlines = await _fetch_news(session, surge)
         explanation = await _generate_explanation(openai_client, surge, headlines, city_name)
 
     if surge_id:

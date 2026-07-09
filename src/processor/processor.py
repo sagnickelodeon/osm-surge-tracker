@@ -8,7 +8,7 @@ Environment variables:
   PROCESSOR_START_ID   Consumer group start position:
                          "$" = only new messages (default, safe for first deploy)
                          "0" = replay entire stream backlog
-  NEWSAPI_KEY          NewsAPI free-tier key (optional — surges recorded without news if absent)
+  GDELT_API_KEY        GDELT Cloud API key  (optional — surges recorded without news if absent)
   OPENAI_API_KEY       OpenAI API key       (optional — surges recorded without explanation if absent)
 """
 
