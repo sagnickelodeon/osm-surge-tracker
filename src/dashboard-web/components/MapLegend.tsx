@@ -22,9 +22,9 @@ import {
 
 // Mirrors severity() in lib/config.ts.
 const TIERS: { color: string; label: string }[] = [
-  { color: COLOR_CRITICAL, label: "≥ 15× normal — Critical" },
-  { color: COLOR_HIGH, label: "8–15× normal — High" },
-  { color: COLOR_ELEVATED, label: "< 8× normal — Elevated" },
+  { color: COLOR_CRITICAL, label: "≥ 25× normal — Critical" },
+  { color: COLOR_HIGH, label: "15–25× normal — High" },
+  { color: COLOR_ELEVATED, label: "10–15× normal — Elevated" },
 ];
 
 // Approximates deck.gl's default HeatmapLayer colour ramp (low → high).

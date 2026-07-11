@@ -152,14 +152,14 @@ export default function TutorialModal({
               <Dot color={COLOR_CRITICAL} />
               <div>
                 <Tag color={COLOR_CRITICAL} label="CRITICAL" />
-                <span>≥ 15× normal edit volume — possible major disaster response or mass mapping event.</span>
+                <span>≥ 25× normal edit volume — possible major disaster response or mass mapping event.</span>
               </div>
             </Row>
             <Row>
               <Dot color={COLOR_HIGH} />
               <div>
                 <Tag color={COLOR_HIGH} label="HIGH" />
-                <span>≥ 8× normal — significant regional surge, worth investigating.</span>
+                <span>15–25× normal — significant regional surge, worth investigating.</span>
               </div>
             </Row>
             <Row>
@@ -167,8 +167,8 @@ export default function TutorialModal({
               <div>
                 <Tag color={COLOR_ELEVATED} label="ELEVATED" />
                 <span>
-                  Gold — the lowest severity tier. Because the detector&apos;s magnitude
-                  floor is 10×, confirmed surges normally appear as HIGH or CRITICAL.
+                  10–15× normal — the smallest confirmed surges (the detector&apos;s
+                  magnitude floor is 10×, so nothing milder is flagged).
                 </span>
               </div>
             </Row>

@@ -126,9 +126,8 @@ export default function Header({
               lineHeight: 1.4,
             }}
           >
-            Real-time tracker of unusual surges in OpenStreetMap editing — often the
-            earliest digital signal of a disaster, humanitarian response, or major local
-            event.
+            Tracking unusual OpenStreetMap editing surges — often an early signal of a
+            disaster or major local event
           </div>
         </div>
 
