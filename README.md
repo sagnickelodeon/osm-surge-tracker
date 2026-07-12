@@ -200,6 +200,30 @@ DuckDB allows only one process to hold a database file open read-write. The proc
 
 ---
 
+## Limitations & roadmap
+
+Everything runs on one Azure B1ms VM — 1 vCPU, 2 GB RAM — and I built it to work within that budget rather than around it. What's missing is missing for one of two reasons: I'd need more hardware, or I chose to keep v1 simple.
+
+**Where the single VM constrains me**
+
+- Poller, processor, API, and Redis share one box — a single point of failure with no headroom. The pipeline is built to shard (Redis consumer groups already give at-least-once delivery); I just don't have a second node to run the consumers on.
+- Baselines only reach back 7 days. Bronze (3-day) and Silver (8-day) retention is what keeps memory and disk under 2 GB — enough for hour-of-day seasonality, not weekly or holiday patterns. Extending it is a storage cost, not a rewrite.
+
+**Choices I made for v1**
+
+- I attribute each edit to the nearest named place rather than a hex grid. It's coarser near borders, but I get "Gaziantep, Türkiye" instead of a cell ID — and that readable name is what feeds the AI explanation, the news matching, and the dashboard. H3 would give cleaner buckets, but the cells still need geocoding to be labelled, so place-names-first was the right trade for a v1 that needs to flag a surge and name where.
+- Detection thresholds are fixed values I tuned by hand, and the baseline only models hour-of-day — no day-of-week or holiday awareness yet. Simple, and easy to reason about while I watch how it behaves against real events.
+
+**What's next**
+
+- **Push alerts** — the next build, and a small one. A surge already lands in `gold_surges`; I fire one HTTP call at that write to a Telegram or Discord channel, so people get a sub-minute ping instead of polling the dashboard. Broadcasting to a channel costs nothing per subscriber and adds no background process, so it fits the VM as-is — the work is message formatting and dedup, not infra.
+- **Longer, richer baselines** — more history plus day-of-week and holiday seasonality, once I have the RAM and disk to hold and rebuild a wider window.
+- **Surge archive** — I already write Gold and Silver to Blob hourly, so I want a read-only view to open any past surge and see the map, headlines, explanation, and the ramp that preceded it. It doubles as a record of the real events the system has caught.
+- **Finer geography** — H3 hex binning for sharper localization and cleaner overlays, once precise boundaries matter more than readable names.
+- **Scaling out** — shard the stream across processor instances and move serving onto object storage.
+
+---
+
 ## Further reading
 
 📐 **[ARCHITECTURE.md](ARCHITECTURE.md)** — a module-by-module walkthrough of every component, the exact data schemas (Redis Streams, DuckDB tables, Parquet snapshots), the serialization conventions, and the surge-detection math.
