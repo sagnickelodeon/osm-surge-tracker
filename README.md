@@ -1,16 +1,31 @@
 # 🌍 OSM Mapping Surge Tracker
 
+### ▶️ [Live dashboard](https://osm-surge-tracker.vercel.app) · [Architecture](ARCHITECTURE.md) · [Run locally](RUNNING_LOCALLY.md)
+
+[![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://osm-surge-tracker.vercel.app)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.13](https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
+
 **A real-time anomaly-detection system that watches OpenStreetMap edits worldwide and flags regions experiencing an unusual spike in mapping activity** — an early signal of a disaster, humanitarian response, or major local event.
 
 When a flood hits Karnataka or an earthquake strikes Türkiye, volunteers flood OpenStreetMap with new buildings, roads, and hospitals within hours. This system detects that surge automatically — comparing each region's live edit volume against its own 7-day, hour-of-day baseline — and surfaces it on a live dashboard with an AI-generated explanation and related news headlines.
 
 > Built by a data engineer as an end-to-end exercise in **streaming data architecture**: ingestion → stream processing → a Bronze/Silver/Gold medallion warehouse → a read API → a live dashboard.
 
+### Engineering highlights
+
+- **Single-writer DuckDB → Parquet serving layer** — the processor holds the sole read-write lock and exports Parquet snapshots every 60 s, so a separate API process serves always-fresh data with zero lock contention.
+- **8-coroutine `asyncio` stream processor** — enrich/geocode, windowing, baselines, z-score detection, AI explanation, snapshot export and archival run concurrently, each self-restarting on failure.
+- **z-score baseline detection** — each region is scored against its own rolling 7-day, hour-of-day baseline, with multi-condition gating tuned to suppress false positives.
+- **Graceful-degradation, fail-closed design** — endpoints return safe empty values instead of 500s, the dashboard shows a banner not a stack trace, and the API refuses to start in production without its auth secret.
+
 ---
 
 ## What it looks like
 
-![OSM Surge Tracker dashboard](images/dashboard-screenshot.png)
+[![OSM Surge Tracker dashboard](images/dashboard-screenshot.png)](https://osm-surge-tracker.vercel.app)
 
 ---
 
@@ -65,26 +80,26 @@ A cold-start fallback (before baselines exist) flags regions exceeding **2× the
 ## Repository layout
 
 ```
-src/
-├── poller/         Component 1 — OSM ingestion
-├── processor/      Component 2 — stream processing + warehouse + snapshots
-│   ├── snapshot.py      exports Parquet for the API (the serving bridge)
-│   ├── blob_uploader.py hourly silver/gold archive → Azure Blob (optional)
-│   └── timeutil.py      IST timezone helpers (now_ist)
-├── api/            Component 3a — FastAPI read API
-│   ├── main.py · db.py · models.py · timeutil.py · routes/{surges,heatmap,stats,track}.py
-│   └── visitors.py · blob_storage.py  hourly visitor log → Azure Blob (optional)
-├── dashboard-web/  Component 3b — Next.js dashboard (React + deck.gl)
-│   ├── app/{layout,page}.tsx · app/api/osm/[...path]/route.ts (server-side proxy)
-│   ├── app/api/track/route.ts  visitor beacon proxy (forwards real client IP)
-│   ├── components/{Header,SurgeFeed,SurgeCard,HistoryTable,SurgeMap}.tsx
-│   └── lib/{api,config,countries,time}.ts
-├── requirements.txt  combined install manifest (all components)
-├── secret.env        optional keys/config (auto-loaded via python-dotenv)
-├── ARCHITECTURE.md   deep dive into every module and data flow
+├── README.md           (this file)
+├── ARCHITECTURE.md     deep dive into every module and data flow
 ├── RUNNING_LOCALLY.md  step-by-step local setup + troubleshooting
-├── DEPLOYMENT.md     cost-efficient public deployment recipe
-└── README.md         (this file)
+├── LICENSE             MIT
+├── requirements.txt    combined install manifest (all components)
+└── src/
+    ├── poller/         Component 1 — OSM ingestion
+    ├── processor/      Component 2 — stream processing + warehouse + snapshots
+    │   ├── snapshot.py      exports Parquet for the API (the serving bridge)
+    │   ├── blob_uploader.py hourly silver/gold archive → Azure Blob (optional)
+    │   └── timeutil.py      IST timezone helpers (now_ist)
+    ├── api/            Component 3a — FastAPI read API
+    │   ├── main.py · db.py · models.py · timeutil.py · routes/{surges,heatmap,stats,track}.py
+    │   └── visitors.py · blob_storage.py  hourly visitor log → Azure Blob (optional)
+    ├── dashboard-web/  Component 3b — Next.js dashboard (React + deck.gl)
+    │   ├── app/{layout,page}.tsx · app/api/osm/[...path]/route.ts (server-side proxy)
+    │   ├── app/api/track/route.ts  visitor beacon proxy (forwards trusted client IP)
+    │   ├── components/{Header,SurgeFeed,SurgeCard,HistoryTable,SurgeMap}.tsx
+    │   └── lib/{api,config,countries,time}.ts
+    └── secret.env.example  template for optional keys/config (copy to secret.env)
 ```
 
 ---
@@ -95,14 +110,15 @@ src/
 dashboard, Component 3b).
 
 ```bash
-# from src/, activate the shared venv
+# from src/, create + activate the shared venv
+python -m venv osm
 source osm/bin/activate              # Windows: .\osm\Scripts\activate
 
-# one combined manifest installs everything
-pip install -r requirements.txt
+# one combined manifest (at the repo root) installs everything
+pip install -r ../requirements.txt
 ```
 
-Optionally copy/fill `secret.env` (`GDELT_API_KEY`, `OPENAI_API_KEY` — both optional;
+Optionally copy `secret.env.example` to `secret.env` and fill it in (`GDELT_API_KEY`, `OPENAI_API_KEY` — both optional;
 without them, surges are still recorded, just with no news/explanation). Every
 component auto-loads `secret.env`, so no manual environment exports are needed.
 
@@ -158,7 +174,7 @@ Base URL: `http://<host>:8000`
 | `GET` | `/surges/history` | Historical surges. Params: `days` (≤90), `country_code`, `min_magnitude`, `limit` (≤1000) |
 | `GET` | `/heatmap` | Per-region edit density, last 24 h |
 | `GET` | `/stats` | Header summary: surges today, countries, peak magnitude, edits/hr |
-| `POST` | `/track` | Visitor beacon (fired by the dashboard); records IP + user-agent for the hourly visitor log → 204 |
+| `POST` | `/track` | Visitor beacon (fired by the dashboard); records a salted **hash** of the IP + user-agent for the hourly visitor log → 204 |
 
 ```bash
 curl http://localhost:8000/surges/active
@@ -178,9 +194,9 @@ DuckDB allows only one process to hold a database file open read-write. The proc
 
 **Timezone (IST).** Every timestamp stored in DuckDB is a naive datetime in **IST (UTC+5:30)** wall-clock, written via `now_ist()` so it's correct regardless of host timezone. Filters compare against an IST "now", and the API serialises with the `+05:30` offset so the dashboard shows correct local times. (The raw OSM edit timestamp stays UTC — it's authoritative upstream data.)
 
-**Cloud archive & visitor logging (optional, Azure Blob).** Set `AZURE_STORAGE_CONNECTION_STRING` + `AZURE_BLOB_CONTAINER` and two extra writers switch on, both best-effort and disabled when unset. The processor archives the silver and gold layers hourly as a time-partitioned history (`silver/dt=YYYY-MM-DD/HH.parquet`, `gold/dt=…`), and the API flushes one JSON summary line per hour to `logs/visits-YYYY-MM-DD.log` — `unique_visitors` (distinct IPs) for "how many people", plus each visitor's IP + user-agent. The dashboard fires a one-shot beacon per page load and its proxy forwards the **real** client IP via `X-Forwarded-For`; without a login, IP + user-agent is the most identity that can be captured. Azure credentials live only on the VM, never on Vercel.
+**Cloud archive & visitor logging (optional, Azure Blob).** Set `AZURE_STORAGE_CONNECTION_STRING` + `AZURE_BLOB_CONTAINER` and two extra writers switch on, both best-effort and disabled when unset. The processor archives the silver and gold layers hourly as a time-partitioned history (`silver/dt=YYYY-MM-DD/HH.parquet`, `gold/dt=…`), and the API flushes one JSON summary line per hour to `logs/visits-YYYY-MM-DD.log` — `unique_visitors` (distinct IP hashes) for "how many people", plus each visitor's IP hash + user-agent. The dashboard fires a one-shot beacon per page load and its proxy forwards the visitor IP taken from Vercel's **trusted `x-real-ip`** (non-spoofable) — **not** the forgeable client-supplied `X-Forwarded-For`. The raw IP is then **immediately hashed** (`HMAC-SHA256` keyed on a per-process `os.urandom(32)` salt, truncated to 16 hex chars and never persisted), so the buffer and the blob store `ip_hash` only — **no raw IP is ever stored**, keeping the log free of personal data under GDPR while still answering "how many distinct people." Azure credentials live only on the VM, never on Vercel.
 
-**Security posture.** The API serves public, read-only data; all user-supplied query parameters are bound (`?`) and clamped by FastAPI validation — never string-interpolated into SQL. No secrets are hardcoded (GDELT/OpenAI keys come from the environment). Because the API runs without a reverse proxy, access is gated in-app: a central middleware (`api/auth.py`) requires the shared `TRACK_SECRET` (sent by the dashboard proxy as `x-track-secret`) on **every** endpoint except `/health`, so the API is reachable only through the dashboard proxy — a client hitting `:8000` directly is refused with a 404. `POST /track` is additionally rate-limited (60/min per IP). Setting `TRACK_SECRET` locks the API down; leaving it unset opens all endpoints for local dev. This open state is **fail-closed in production**: with `APP_ENV=production` the API refuses to start unless `TRACK_SECRET` is set (it raises before uvicorn binds), so a public deployment can never come up with the gate silently disabled; `APP_ENV` defaults to `development`, where an open API is intentional. Optionally terminate TLS in uvicorn (see `DEPLOYMENT.md`) and restrict the VM port via the Azure NSG.
+**Security posture.** The API serves public, read-only data; all user-supplied query parameters are bound (`?`) and clamped by FastAPI validation — never string-interpolated into SQL. No secrets are hardcoded (GDELT/OpenAI keys come from the environment). Because the API runs without a reverse proxy, access is gated in-app: a central middleware (`api/auth.py`) requires the shared `TRACK_SECRET` (sent by the dashboard proxy as `x-track-secret`) on **every** endpoint except `/health`, so the API is reachable only through the dashboard proxy — a client hitting `:8000` directly is refused with a 404. `POST /track` is additionally rate-limited (60/min per IP). Setting `TRACK_SECRET` locks the API down; leaving it unset opens all endpoints for local dev. This open state is **fail-closed in production**: with `APP_ENV=production` the API refuses to start unless `TRACK_SECRET` is set (it raises before uvicorn binds), so a public deployment can never come up with the gate silently disabled; `APP_ENV` defaults to `development`, where an open API is intentional. Optionally terminate TLS in uvicorn and restrict the VM port via the Azure NSG.
 
 ---
 

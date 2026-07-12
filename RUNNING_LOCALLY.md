@@ -298,8 +298,8 @@ Make these two edits, then restart the processor and API.
 **Step D — wait ~60–90 s, then look in the container.** You should now see:
 
 ```
-<container>/silver/dt=YYYY-MM-DD/HH.parquet     ← from the processor (refreshed each minute)
-<container>/gold/dt=YYYY-MM-DD/HH.parquet        ← from the processor (often a zero-row file —
+<container>/silver/YYYY-MM-DD/HH.parquet     ← from the processor (refreshed each minute)
+<container>/gold/YYYY-MM-DD/HH.parquet        ← from the processor (often a zero-row file —
                                                    surges are rare; the file still appears)
 <container>/logs/visits-YYYY-MM-DD.log           ← from the API (one JSON line per minute now)
 ```

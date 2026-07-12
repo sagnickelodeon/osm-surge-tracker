@@ -479,8 +479,8 @@ completed `[HH:00, HH+1:00)` it exports two slices and uploads them:
 
 | Blob path | Source (rows in that hour) |
 |---|---|
-| `silver/dt=YYYY-MM-DD/HH.parquet` | `silver_windowed_edits` where `window_start` ∈ the hour |
-| `gold/dt=YYYY-MM-DD/HH.parquet` | `gold_surges` where `detected_at` ∈ the hour (often empty) |
+| `silver/YYYY-MM-DD/HH.parquet` | `silver_windowed_edits` where `window_start` ∈ the hour |
+| `gold/YYYY-MM-DD/HH.parquet` | `gold_surges` where `detected_at` ∈ the hour (often empty) |
 
 The DuckDB `COPY` runs **synchronously on the event loop** (like `snapshot.py`, so it never
 interleaves on the shared connection); only the network upload is off-loaded with
