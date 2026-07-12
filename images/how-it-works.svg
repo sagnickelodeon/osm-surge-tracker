@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 500" font-family="'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#55606E"/>
+    </marker>
+  </defs>
+
+  <!-- ground -->
+  <rect x="4" y="4" width="1152" height="492" rx="16" fill="#0E1117" stroke="#20262F" stroke-width="1.5"/>
+
+  <!-- eyebrow -->
+  <text x="34" y="42" font-size="12" font-weight="600" letter-spacing="2.5" fill="#6B7480">HOW IT WORKS · DATA FLOW</text>
+  <text x="1126" y="42" font-size="12" font-weight="600" letter-spacing="1" fill="#4B5563" text-anchor="end">ingest → process → serve</text>
+
+  <!-- ============ INGEST ============ -->
+  <!-- source pill -->
+  <text x="42" y="94" font-size="10.5" font-weight="600" letter-spacing="2" fill="#6B7480">SOURCE</text>
+  <rect x="42" y="104" width="250" height="50" rx="25" fill="#12161D" stroke="#313A46"/>
+  <circle cx="70" cy="129" r="10" fill="none" stroke="#4EA1FF" stroke-width="1.6"/>
+  <path d="M60,129 h20 M70,119 v20 M62,123 q8,6 16,0 M62,135 q8,-6 16,0" stroke="#4EA1FF" stroke-width="1" fill="none" opacity="0.8"/>
+  <text x="90" y="134" font-size="13.5" font-weight="600" fill="#C7CDD6">planet.openstreetmap.org</text>
+
+  <!-- source -> poller -->
+  <line x1="167" y1="154" x2="167" y2="206" stroke="#3C4552" stroke-width="1.6" marker-end="url(#ah)"/>
+  <text x="177" y="184" font-size="11" fill="#8A93A0" font-family="'SF Mono','Cascadia Code',Consolas,monospace">.osc.gz · 60s</text>
+
+  <!-- poller card -->
+  <rect x="42" y="208" width="250" height="120" rx="12" fill="#161B24" stroke="#272D38"/>
+  <circle cx="70" cy="236" r="13" fill="#4EA1FF"/>
+  <text x="70" y="237" font-size="13" font-weight="700" fill="#0E1117" text-anchor="middle" dominant-baseline="central">1</text>
+  <text x="92" y="233" font-size="16" font-weight="700" fill="#E7EBF2">Poller</text>
+  <text x="92" y="251" font-size="11" fill="#6B7480" font-family="'SF Mono','Cascadia Code',Consolas,monospace">poller/</text>
+  <text x="62" y="288" font-size="12.5" fill="#9AA4B2">Fetch &amp; parse OSM diffs</text>
+  <text x="62" y="309" font-size="11" fill="#6B7480" font-family="'SF Mono','Cascadia Code',Consolas,monospace">requests · pyosmium</text>
+
+  <!-- poller -> processor (Redis) -->
+  <line x1="292" y1="268" x2="356" y2="268" stroke="#3C4552" stroke-width="1.6" marker-end="url(#ah)"/>
+  <text x="324" y="256" font-size="11" fill="#8A93A0" text-anchor="middle">Redis Stream</text>
+  <text x="324" y="286" font-size="11" fill="#6B7480" text-anchor="middle" font-family="'SF Mono','Cascadia Code',Consolas,monospace">osm:raw</text>
+
+  <!-- ============ PROCESS ============ -->
+  <rect x="356" y="86" width="446" height="364" rx="14" fill="#13181F" stroke="#272D38"/>
+  <circle cx="384" cy="116" r="13" fill="#8B7CF6"/>
+  <text x="384" y="117" font-size="13" font-weight="700" fill="#0E1117" text-anchor="middle" dominant-baseline="central">2</text>
+  <text x="406" y="113" font-size="16" font-weight="700" fill="#E7EBF2">Stream Processor</text>
+  <text x="406" y="131" font-size="11" fill="#6B7480" font-family="'SF Mono','Cascadia Code',Consolas,monospace">processor/ · 8 async coroutines</text>
+
+  <!-- medallion ribbon -->
+  <g>
+    <!-- bronze -->
+    <rect x="376" y="152" width="122" height="44" rx="9" fill="#181E27" stroke="#CD7F32" stroke-opacity="0.5"/>
+    <circle cx="394" cy="174" r="6" fill="#CD7F32"/>
+    <text x="408" y="178" font-size="13" font-weight="600" fill="#E7EBF2">Bronze</text>
+    <text x="437" y="212" font-size="10.5" fill="#8A93A0" text-anchor="middle">enrich + geocode</text>
+    <!-- silver -->
+    <rect x="518" y="152" width="122" height="44" rx="9" fill="#181E27" stroke="#C4CAD4" stroke-opacity="0.5"/>
+    <circle cx="536" cy="174" r="6" fill="#C4CAD4"/>
+    <text x="550" y="178" font-size="13" font-weight="600" fill="#E7EBF2">Silver</text>
+    <text x="579" y="212" font-size="10.5" fill="#8A93A0" text-anchor="middle">5-min windows</text>
+    <!-- gold -->
+    <rect x="660" y="152" width="122" height="44" rx="9" fill="#181E27" stroke="#F2C14E" stroke-opacity="0.55"/>
+    <circle cx="678" cy="174" r="6" fill="#F2C14E"/>
+    <text x="692" y="178" font-size="13" font-weight="600" fill="#E7EBF2">Gold</text>
+    <text x="721" y="212" font-size="10.5" fill="#8A93A0" text-anchor="middle">confirmed surges</text>
+    <!-- ribbon arrows -->
+    <line x1="498" y1="174" x2="518" y2="174" stroke="#4A5563" stroke-width="1.5" marker-end="url(#ah)"/>
+    <line x1="640" y1="174" x2="660" y2="174" stroke="#4A5563" stroke-width="1.5" marker-end="url(#ah)"/>
+  </g>
+
+  <!-- surge rule panel -->
+  <rect x="376" y="230" width="406" height="52" rx="10" fill="#191F28" stroke="#313A46"/>
+  <circle cx="392" cy="250" r="4" fill="#FF6B4A"/>
+  <text x="404" y="254" font-size="9.5" font-weight="600" letter-spacing="1.5" fill="#6B7480">SURGE DETECTED WHEN</text>
+  <text x="392" y="273" font-size="11.5" fill="#CBD2DC" font-family="'SF Mono','Cascadia Code',Consolas,monospace">z &gt; 4 · mag &gt; 10× · users ≥ 3 · edits &gt; 1000</text>
+
+  <!-- enrich panel -->
+  <rect x="376" y="294" width="406" height="46" rx="10" fill="#191F28" stroke="#313A46"/>
+  <circle cx="392" cy="311" r="4" fill="#FF7A59"/>
+  <text x="404" y="315" font-size="9.5" font-weight="600" letter-spacing="1.5" fill="#6B7480">ENRICH</text>
+  <text x="392" y="333" font-size="11.5" fill="#CBD2DC">GDELT Events + OpenAI → explanation + news</text>
+
+  <!-- warehouse -->
+  <path d="M388,360 L388,392 A20,6 0 0 0 428,392 L428,360" fill="#1B222C" stroke="#3B4552" stroke-width="1.2"/>
+  <ellipse cx="408" cy="360" rx="20" ry="6" fill="#26303B" stroke="#3B4552" stroke-width="1.2"/>
+  <text x="442" y="374" font-size="12.5" font-weight="600" fill="#C7CDD6">DuckDB warehouse</text>
+  <text x="442" y="391" font-size="10.5" fill="#6B7480">medallion tables + hourly baselines</text>
+
+  <!-- processor -> serve (Parquet) -->
+  <line x1="802" y1="196" x2="858" y2="196" stroke="#3C4552" stroke-width="1.6" marker-end="url(#ah)"/>
+  <text x="830" y="184" font-size="11" fill="#8A93A0" text-anchor="middle">Parquet</text>
+  <text x="830" y="214" font-size="10.5" fill="#6B7480" text-anchor="middle" font-family="'SF Mono','Cascadia Code',Consolas,monospace">60s</text>
+
+  <!-- ============ SERVE ============ -->
+  <!-- fastapi -->
+  <rect x="858" y="140" width="262" height="116" rx="12" fill="#161B24" stroke="#272D38"/>
+  <rect x="874" y="156" width="30" height="24" rx="12" fill="#46C39A"/>
+  <text x="889" y="168" font-size="12" font-weight="700" fill="#0E1117" text-anchor="middle" dominant-baseline="central">3a</text>
+  <text x="914" y="165" font-size="16" font-weight="700" fill="#E7EBF2">FastAPI</text>
+  <text x="914" y="182" font-size="11" fill="#6B7480">read-only JSON API</text>
+  <text x="878" y="216" font-size="11" fill="#9AA4B2" font-family="'SF Mono','Cascadia Code',Consolas,monospace">/surges · /heatmap</text>
+  <text x="878" y="235" font-size="11" fill="#9AA4B2" font-family="'SF Mono','Cascadia Code',Consolas,monospace">/stats · /health</text>
+
+  <!-- fastapi -> dashboard (JSON) -->
+  <line x1="989" y1="256" x2="989" y2="316" stroke="#3C4552" stroke-width="1.6" marker-end="url(#ah)"/>
+  <text x="999" y="290" font-size="11" fill="#8A93A0" font-family="'SF Mono','Cascadia Code',Consolas,monospace">JSON</text>
+
+  <!-- dashboard -->
+  <rect x="858" y="318" width="262" height="128" rx="12" fill="#161B24" stroke="#272D38"/>
+  <rect x="874" y="334" width="30" height="24" rx="12" fill="#46C39A"/>
+  <text x="889" y="346" font-size="12" font-weight="700" fill="#0E1117" text-anchor="middle" dominant-baseline="central">3b</text>
+  <text x="914" y="343" font-size="16" font-weight="700" fill="#E7EBF2">Next.js Dashboard</text>
+  <text x="914" y="360" font-size="11" fill="#6B7480">via server-side proxy</text>
+  <text x="878" y="392" font-size="12" fill="#9AA4B2">deck.gl world map</text>
+  <text x="878" y="412" font-size="12" fill="#9AA4B2">+ live surge feed</text>
+  <text x="878" y="432" font-size="10.5" fill="#6B7480" font-family="'SF Mono','Cascadia Code',Consolas,monospace">React · TypeScript · Vercel</text>
+</svg>

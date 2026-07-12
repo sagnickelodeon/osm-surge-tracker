@@ -8,6 +8,11 @@ communicate through Redis Streams (ingest path) and Parquet snapshots (serving p
 
 ## System Map
 
+![OSM Surge Tracker system map: OpenStreetMap → Poller → Redis osm:raw → Stream Processor (8 coroutines: Bronze/Silver/Gold data path + periodic loops) → DuckDB / Parquet / Azure Blob sinks → FastAPI → Next.js dashboard](images/system-map.svg)
+
+<details>
+<summary>Text version (ASCII)</summary>
+
 ```
 planet.openstreetmap.org
         │  HTTP GET .osc.gz every 60 s
@@ -65,6 +70,8 @@ planet.openstreetmap.org
 │   Vercel (or any Node host).                                │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 > **Why Parquet snapshots instead of reading the DuckDB file directly?**
 > DuckDB allows only **one process** to hold a database file open in read-write

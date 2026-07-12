@@ -10,41 +10,13 @@ When a flood hits Karnataka or an earthquake strikes Türkiye, volunteers flood 
 
 ## What it looks like
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  OSM SURGE TRACKER                    LIVE · Updated 10:32 UTC │
-│  7 SURGES TODAY   4 COUNTRIES   23.4× PEAK   18,472 EDITS/HR   │
-├────────────────────────────────────┬────────────────────────┤
-│                                    │  ● ACTIVE SURGES   3    │
-│         dark world map             │  Karnataka, IN  CRITICAL │
-│   • heatmap of edit density        │  23.4× · 847 edits      │
-│   • surge dots (severity colour)   │  12m ago · BUILDING     │
-│                                    │  Izmir, TR      HIGH    │
-│                                    │  8.1× · 312 edits       │
-└────────────────────────────────────┴────────────────────────┘
-```
+![OSM Surge Tracker dashboard](images/dashboard-screenshot.png)
 
 ---
 
 ## How it works
 
-```
-planet.openstreetmap.org
-        │  minutely diffs (.osc.gz)
-        ▼
-┌──────────────┐   Redis Stream   ┌────────────────────────────┐
-│ 1. Poller    │ ───────────────▶ │ 2. Stream Processor (async) │
-│   (requests) │     osm:raw      │   Bronze → Silver → Gold    │
-└──────────────┘                  │   z-score anomaly detection │
-                                  │   GDELT + OpenAI enrich     │
-                                  └──────────────┬──────────────┘
-                                   DuckDB         │ Parquet snapshots (60s)
-                                   warehouse      ▼
-                                          ┌────────────────┐  JSON  ┌──────────────┐
-                                          │ 3a. FastAPI    │ ─────▶ │ 3b. Next.js   │
-                                          │   (read-only)  │        │   dashboard   │
-                                          └────────────────┘        └──────────────┘
-```
+![OSM Surge Tracker data-flow: OpenStreetMap diffs → Poller → Redis → Stream Processor (Bronze/Silver/Gold + surge detection + GDELT/OpenAI enrichment + DuckDB) → Parquet → FastAPI → Next.js dashboard](images/how-it-works.svg)
 
 | # | Component | Role |
 |---|-----------|------|
