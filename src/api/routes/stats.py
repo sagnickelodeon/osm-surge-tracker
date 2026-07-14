@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Request
 from api import updates
 from api.db import query_one
 from api.models import StatsResponse
+from api.routes.heatmap import HEATMAP_WINDOW_HOURS
 from api.timeutil import now_ist
 
 router = APIRouter(tags=["stats"])
@@ -55,4 +56,6 @@ async def get_stats(
     # endpoint). Read from the Blob-backed cache refreshed by api/updates.py.
     resp.whats_new = updates.whats_new
     resp.whats_coming = updates.whats_coming
+    # Surface the heatmap window so the dashboard copy stays in sync with the backend.
+    resp.heatmap_window_hours = HEATMAP_WINDOW_HOURS
     return resp

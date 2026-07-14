@@ -87,10 +87,14 @@ function Tag({ color, label }: { color: string; label: string }) {
 export default function TutorialModal({
   open,
   onClose,
+  heatmapWindowHours = 1,
 }: {
   open: boolean;
   onClose: () => void;
+  heatmapWindowHours?: number;
 }) {
+  const heatmapWindowLabel =
+    heatmapWindowHours === 1 ? "hour" : `${heatmapWindowHours} hours`;
   return (
     <Modal open={open} onClose={onClose} title="How to Use OSM Surge Tracker" width={680}>
       <div style={{ padding: "1.5rem 1.5rem 2rem" }}>
@@ -118,8 +122,8 @@ export default function TutorialModal({
             <span style={{ marginTop: 2, flexShrink: 0 }}>🌡️</span>
             <div>
               <strong style={{ color: "#FFFFFF" }}>Heatmap glow</strong> — background
-              colour shows the density of OSM edits across all regions in the last 24 h.
-              Brighter = more editing activity.
+              colour shows the density of OSM edits across all regions in the last{" "}
+              {heatmapWindowLabel}. Brighter = more editing activity.
             </div>
           </Row>
           <Row>

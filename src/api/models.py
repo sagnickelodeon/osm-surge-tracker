@@ -90,6 +90,9 @@ class StatsResponse(BaseModel):
     countries_affected: int = 0
     highest_magnitude_today: float | None = None   # MAX() is NULL when no surges
     edits_last_hour: int = 0
+    # The heatmap's look-back window (hours), so the dashboard can describe it without
+    # hard-coding a value that would drift from the backend. Source: routes/heatmap.py.
+    heatmap_window_hours: int = 1
     # Update lists shown by the dashboard's What's-new / What's-coming buttons.
     # Refreshed from Azure Blob by api/updates.py; empty when unconfigured.
     whats_new: list[str] = []

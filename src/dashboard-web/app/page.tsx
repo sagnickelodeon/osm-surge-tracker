@@ -170,7 +170,11 @@ export default function DashboardPage() {
           setTutorialOpen(true);
         }}
       />
-      <TutorialModal open={tutorialOpen} onClose={() => setTutorialOpen(false)} />
+      <TutorialModal
+        open={tutorialOpen}
+        onClose={() => setTutorialOpen(false)}
+        heatmapWindowHours={stats.data?.heatmap_window_hours ?? 1}
+      />
       <ChangelogModal
         open={whatsNewOpen}
         onClose={() => setWhatsNewOpen(false)}

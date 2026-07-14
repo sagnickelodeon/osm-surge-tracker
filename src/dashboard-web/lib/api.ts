@@ -47,6 +47,7 @@ export interface Stats {
   countries_affected: number;
   highest_magnitude_today: number | null;
   edits_last_hour: number;
+  heatmap_window_hours: number;
   whats_new: string[];
   whats_coming: string[];
 }
@@ -56,6 +57,7 @@ export const EMPTY_STATS: Stats = {
   countries_affected: 0,
   highest_magnitude_today: null,
   edits_last_hour: 0,
+  heatmap_window_hours: 1,
   whats_new: [],
   whats_coming: [],
 };
