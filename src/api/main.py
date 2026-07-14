@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from api import visitors
+from api import updates, visitors
 from api.auth import SecretGateMiddleware
 from api.db import get_connection
 from api.models import HealthResponse
@@ -48,13 +48,16 @@ async def lifespan(app: FastAPI):
     app.state.db = get_connection()
     # Hourly visitor-log flush to Azure Blob (no-op if unconfigured).
     app.state.flush_task = asyncio.create_task(visitors.flush_loop())
+    # Refresh the What's-new/coming lists from Blob every 60s (no-op if unconfigured).
+    app.state.updates_task = asyncio.create_task(updates.refresh_loop())
     logger.info("API ready")
     yield
-    app.state.flush_task.cancel()
-    try:
-        await app.state.flush_task
-    except asyncio.CancelledError:
-        pass
+    for task in (app.state.flush_task, app.state.updates_task):
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     app.state.db.close()
     logger.info("DuckDB connection closed")
 

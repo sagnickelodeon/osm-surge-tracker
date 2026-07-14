@@ -15,6 +15,11 @@ export const CARD_BG = "#13161C";
 export const CARD_BG_ALT = "#1A1D23";
 export const BORDER = "#2A2D35";
 
+// Accents for the What's-new / What's-coming panels + their header buttons
+// (green = shipped, purple = planned — distinct from the severity palette).
+export const ACCENT_NEW = "#3FB950";
+export const ACCENT_COMING = "#A371F7";
+
 // Muted text
 export const TEXT_DARK = "#666666";
 export const TEXT_MID = "#888888";

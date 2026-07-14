@@ -38,3 +38,7 @@ out/
 Thumbs.db
 .vscode/
 .idea/
+
+# ----- Misc ----
+whats_coming.txt
+whats_new.txt

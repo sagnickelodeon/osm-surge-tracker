@@ -47,6 +47,8 @@ export interface Stats {
   countries_affected: number;
   highest_magnitude_today: number | null;
   edits_last_hour: number;
+  whats_new: string[];
+  whats_coming: string[];
 }
 
 export const EMPTY_STATS: Stats = {
@@ -54,6 +56,8 @@ export const EMPTY_STATS: Stats = {
   countries_affected: 0,
   highest_magnitude_today: null,
   edits_last_hour: 0,
+  whats_new: [],
+  whats_coming: [],
 };
 
 /** Build a same-origin proxy URL: /api/osm/<path>?<query>. */

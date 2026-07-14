@@ -535,11 +535,12 @@ api/
 ├── ratelimit.py       slowapi limiter for POST /track (60/min per client IP; no NGINX)
 ├── timeutil.py        IST helpers — now_ist(), IST tzinfo
 ├── visitors.py        in-memory visitor buffer (3000-IP/hr cap) + hourly flush_loop → Azure Blob log
-├── blob_storage.py    Azure append-blob helper (no-op if unconfigured)
+├── updates.py         60s Blob refresh of What's-new/coming lists → served inline on /stats
+├── blob_storage.py    Azure append-blob helper + read_text() (no-op if unconfigured)
 ├── routes/
 │   ├── surges.py      /surges/active, /surges/history
 │   ├── heatmap.py     /heatmap
-│   ├── stats.py       /stats
+│   ├── stats.py       /stats (+ whats_new / whats_coming update lists)
 │   └── track.py       POST /track (visitor beacon; auth via central gate, rate-limited)
 └── requirements.txt
 ```
@@ -592,7 +593,7 @@ instead of becoming a broken empty path).
 | `GET /surges/active` | gold | active surges, last 2 h, magnitude desc |
 | `GET /surges/history` | gold | filtered history (`days`, `country_code`, `min_magnitude`, `limit`) |
 | `GET /heatmap` | silver | per-region edit density, last 1 h |
-| `GET /stats` | gold + bronze | surges today, countries, peak magnitude, edits/hr |
+| `GET /stats` | gold + bronze | surges today, countries, peak magnitude, edits/hr + `whats_new`/`whats_coming` |
 | `POST /track` | — | visitor beacon; `TRACK_SECRET`-gated + rate-limited; records IP + user-agent into the hourly buffer, returns 204 |
 
 **Visitor logging (`visitors.py` + `blob_storage.py`).** The dashboard fires a one-shot
@@ -636,11 +637,12 @@ dashboard-web/
 │   ├── api/osm/[...path]/route.ts  server-side GET proxy → API_BASE_URL (adds TRACK_SECRET)
 │   └── api/track/route.ts          POST beacon proxy → API_BASE_URL/track (adds TRACK_SECRET + trusted x-client-ip)
 ├── components/
-│   ├── Header.tsx                  title bar (IST clock) + four metric tiles
+│   ├── Header.tsx                  title bar (IST clock) + four metric tiles + action buttons
 │   ├── SurgeFeed.tsx               active surge list
 │   ├── SurgeCard.tsx               one surge card + click-to-expand explanation
 │   ├── HistoryTable.tsx            collapsible 7-day history table
 │   ├── MapLegend.tsx               map legend (daylight wash / glow / surge dots)
+│   ├── ChangelogModal.tsx          What's-new / What's-coming bullet list (items from /stats)
 │   └── SurgeMap.tsx                deck.gl dark world map (daylight + heatmap + surge layers)
 └── lib/
     ├── api.ts                      typed fetch helpers (safe empty defaults)
@@ -694,6 +696,14 @@ the camera is *controlled*: `SurgeMap` holds the view state and every pan/zoom p
 through `clampToWorld`, which nudges the centre back so it can't roll past the ±180° /
 ±85.05° edges into empty space. `MAP_MIN_ZOOM` (= initial zoom) blocks zooming out far
 enough to reveal more than one world.
+
+**Header buttons.** `Header.tsx`'s `NavButton` renders three visual tiers: a prominent
+*strong* pair — **What it is** (reuses `WelcomeModal`) and **How to use** (`TutorialModal`) —
+an accent-tinted *pill* pair — **✨ What's new** / **🚧 What's coming**, which open
+`ChangelogModal` — and the *ghost* **✉ Feedback**. The What's-new/coming bullet lists are not
+fetched separately: they arrive on the `/stats` payload the page already polls
+(`stats.whats_new` / `stats.whats_coming`, backed by `api/updates.py` reading two Blob text
+files every 60 s), so `ChangelogModal` is purely presentational.
 
 **Layout:** a 70/30 CSS-grid split of world map (left) and live surge feed (right), with
 the collapsible 7-day history table on a **full-width row below** both columns.

@@ -8,6 +8,7 @@ from datetime import timedelta
 import duckdb
 from fastapi import APIRouter, Depends, Request
 
+from api import updates
 from api.db import query_one
 from api.models import StatsResponse
 from api.timeutil import now_ist
@@ -49,6 +50,9 @@ async def get_stats(
     row = query_one(conn, _STATS_SQL, [cutoff_24h, cutoff_24h, cutoff_24h, cutoff_1h])
     # None only if snapshots are missing or the query errored — fall back to zeros
     # so the header still renders.
-    if row is None:
-        return StatsResponse()
-    return StatsResponse.model_validate(row)
+    resp = StatsResponse() if row is None else StatsResponse.model_validate(row)
+    # The update lists ride along on the stats the dashboard already polls (no extra
+    # endpoint). Read from the Blob-backed cache refreshed by api/updates.py.
+    resp.whats_new = updates.whats_new
+    resp.whats_coming = updates.whats_coming
+    return resp

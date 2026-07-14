@@ -56,3 +56,24 @@ def append_line(blob_name: str, text: str) -> None:
         blob.create_append_blob()
     blob.append_block((text + "\n").encode("utf-8"))
     logger.info("Appended visitor log line to %s", blob_name)
+
+
+def read_text(blob_name: str) -> str | None:
+    """
+    Read the whole UTF-8 text blob <container>/<blob_name>.
+
+    Returns None when Azure is unconfigured, the blob is missing, or a read fails —
+    callers treat None as "no content" (best-effort, never raises). Synchronous
+    network I/O — run off the event loop via asyncio.to_thread.
+    """
+    if not is_configured():
+        return None
+    try:
+        client = _get_container_client()
+        blob = client.get_blob_client(blob_name)
+        if not blob.exists():
+            return None
+        return blob.download_blob().readall().decode("utf-8")
+    except Exception:
+        logger.exception("Failed to read blob %s", blob_name)
+        return None

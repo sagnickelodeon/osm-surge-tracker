@@ -5,21 +5,93 @@
  * and four metric tiles.
  */
 
+import { useState } from "react";
+
 import { Stats } from "@/lib/api";
-import { BORDER, CARD_BG_ALT, TEXT_DARK, TEXT_MID } from "@/lib/config";
+import {
+  ACCENT_COMING,
+  ACCENT_NEW,
+  BORDER,
+  CARD_BG_ALT,
+  TEXT_DARK,
+  TEXT_LIGHT,
+  TEXT_MID,
+} from "@/lib/config";
 import InfoTip from "./InfoTip";
 
-const iconBtn: React.CSSProperties = {
-  background: "transparent",
-  border: `1px solid #2A2D35`,
-  borderRadius: 4,
-  color: TEXT_MID,
-  cursor: "pointer",
-  fontSize: "0.72rem",
-  letterSpacing: "0.06em",
-  padding: "0.25rem 0.6rem",
-  transition: "border-color 0.15s, color 0.15s",
-};
+// Header action buttons come in three looks:
+//   "strong" — the prominent "learn about this" pair (What it is · How to use)
+//   "pill"   — the accent-tinted update pair (What's new · What's coming)
+//   "ghost"  — the understated default (Feedback)
+type NavVariant = "strong" | "pill" | "ghost";
+
+function NavButton({
+  onClick,
+  title,
+  variant,
+  accent,
+  children,
+}: {
+  onClick: () => void;
+  title: string;
+  variant: NavVariant;
+  accent?: string;
+  children: React.ReactNode;
+}) {
+  const [hover, setHover] = useState(false);
+
+  const base: React.CSSProperties = {
+    cursor: "pointer",
+    fontSize: "0.72rem",
+    letterSpacing: "0.06em",
+    whiteSpace: "nowrap",
+    transition: "border-color 0.15s, color 0.15s, background 0.15s",
+  };
+
+  let style: React.CSSProperties;
+  if (variant === "strong") {
+    style = {
+      ...base,
+      background: hover ? "#22262E" : CARD_BG_ALT,
+      border: `1px solid ${hover ? "#5A5E68" : "#3A3E48"}`,
+      borderRadius: 4,
+      color: hover ? "#FFFFFF" : TEXT_LIGHT,
+      fontWeight: 600,
+      padding: "0.3rem 0.7rem",
+    };
+  } else if (variant === "pill") {
+    const a = accent ?? TEXT_MID;
+    style = {
+      ...base,
+      background: hover ? `${a}22` : "transparent",
+      border: `1px solid ${hover ? a : `${a}66`}`,
+      borderRadius: 999,
+      color: hover ? "#FFFFFF" : a,
+      padding: "0.25rem 0.7rem",
+    };
+  } else {
+    style = {
+      ...base,
+      background: "transparent",
+      border: `1px solid ${hover ? "#4A4D55" : "#2A2D35"}`,
+      borderRadius: 4,
+      color: hover ? "#CCCCCC" : TEXT_MID,
+      padding: "0.25rem 0.6rem",
+    };
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={style}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      {children}
+    </button>
+  );
+}
 
 function Tile({ value, label, tip }: { value: string; label: string; tip: string }) {
   return (
@@ -55,12 +127,18 @@ function Tile({ value, label, tip }: { value: string; label: string; tip: string
 export default function Header({
   stats,
   lastUpdated,
+  onWhatIs,
   onTutorial,
+  onWhatsNew,
+  onWhatsComing,
   onFeedback,
 }: {
   stats: Stats;
   lastUpdated: string;
+  onWhatIs: () => void;
   onTutorial: () => void;
+  onWhatsNew: () => void;
+  onWhatsComing: () => void;
   onFeedback: () => void;
 }) {
   const peak = stats.highest_magnitude_today;
@@ -132,40 +210,38 @@ export default function Header({
         </div>
 
         {/* right side: IST stamp + action buttons */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.6rem",
+            flexWrap: "wrap",
+            justifyContent: "flex-end",
+          }}
+        >
           <span style={{ fontSize: "0.75rem", color: TEXT_MID }}>
             LIVE&nbsp;·&nbsp;Updated {lastUpdated} IST
           </span>
-          <button
-            onClick={onTutorial}
-            style={iconBtn}
-            title="How to use"
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = "#4a4d55";
-              (e.currentTarget as HTMLButtonElement).style.color = "#CCCCCC";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = "#2A2D35";
-              (e.currentTarget as HTMLButtonElement).style.color = TEXT_MID;
-            }}
-          >
+          <NavButton onClick={onWhatIs} title="What this is" variant="strong">
+            ⓘ What it is
+          </NavButton>
+          <NavButton onClick={onTutorial} title="How to use" variant="strong">
             ? How to use
-          </button>
-          <button
-            onClick={onFeedback}
-            style={iconBtn}
-            title="Send feedback"
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = "#4a4d55";
-              (e.currentTarget as HTMLButtonElement).style.color = "#CCCCCC";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = "#2A2D35";
-              (e.currentTarget as HTMLButtonElement).style.color = TEXT_MID;
-            }}
+          </NavButton>
+          <NavButton onClick={onWhatsNew} title="What's new" variant="pill" accent={ACCENT_NEW}>
+            ✨ What&apos;s new
+          </NavButton>
+          <NavButton
+            onClick={onWhatsComing}
+            title="What's coming"
+            variant="pill"
+            accent={ACCENT_COMING}
           >
+            🚧 What&apos;s coming
+          </NavButton>
+          <NavButton onClick={onFeedback} title="Send feedback" variant="ghost">
             ✉ Feedback
-          </button>
+          </NavButton>
         </div>
       </div>
 

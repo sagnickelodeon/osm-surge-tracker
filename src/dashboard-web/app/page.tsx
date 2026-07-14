@@ -19,13 +19,14 @@ import {
   fetchStats,
   fetchSurgeHistory,
 } from "@/lib/api";
-import { REFRESH_INTERVAL_MS } from "@/lib/config";
+import { ACCENT_COMING, ACCENT_NEW, REFRESH_INTERVAL_MS } from "@/lib/config";
 import { nowIST } from "@/lib/time";
 import Header from "@/components/Header";
 import SurgeFeed from "@/components/SurgeFeed";
 import HistoryTable from "@/components/HistoryTable";
 import Footer from "@/components/Footer";
 import TutorialModal from "@/components/TutorialModal";
+import ChangelogModal from "@/components/ChangelogModal";
 import FeedbackModal from "@/components/FeedbackModal";
 import WelcomeModal from "@/components/WelcomeModal";
 
@@ -61,6 +62,8 @@ export default function DashboardPage() {
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
+  const [whatsComingOpen, setWhatsComingOpen] = useState(false);
 
   const stats = useSWR("stats", fetchStats, {
     ...swrOpts,
@@ -111,7 +114,10 @@ export default function DashboardPage() {
         <Header
           stats={stats.data ?? EMPTY_STATS}
           lastUpdated={lastUpdated}
+          onWhatIs={() => setWelcomeOpen(true)}
           onTutorial={() => setTutorialOpen(true)}
+          onWhatsNew={() => setWhatsNewOpen(true)}
+          onWhatsComing={() => setWhatsComingOpen(true)}
           onFeedback={() => setFeedbackOpen(true)}
         />
 
@@ -165,6 +171,22 @@ export default function DashboardPage() {
         }}
       />
       <TutorialModal open={tutorialOpen} onClose={() => setTutorialOpen(false)} />
+      <ChangelogModal
+        open={whatsNewOpen}
+        onClose={() => setWhatsNewOpen(false)}
+        title="What's New"
+        items={stats.data?.whats_new ?? []}
+        accent={ACCENT_NEW}
+        emptyText="No updates to show right now — check back soon."
+      />
+      <ChangelogModal
+        open={whatsComingOpen}
+        onClose={() => setWhatsComingOpen(false)}
+        title="What's Coming"
+        items={stats.data?.whats_coming ?? []}
+        accent={ACCENT_COMING}
+        emptyText="Nothing on the public roadmap yet — check back soon."
+      />
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </>
   );

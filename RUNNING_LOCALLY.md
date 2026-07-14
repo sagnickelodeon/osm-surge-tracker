@@ -202,9 +202,9 @@ Open `http://localhost:3000`.
 
 ## Testing the Azure Blob features (optional)
 
-The silver/gold archive and the visitor log are **off** unless `AZURE_STORAGE_CONNECTION_STRING`
-and `AZURE_BLOB_CONTAINER` are set. To try them locally without a real storage account, use the
-**Azurite** emulator:
+The silver/gold archive, the visitor log, and the What's-new/coming update lists are **off**
+unless `AZURE_STORAGE_CONNECTION_STRING` and `AZURE_BLOB_CONTAINER` are set. To try them locally
+without a real storage account, use the **Azurite** emulator:
 
 ```powershell
 # 1. Run Azurite (Docker) — exposes the blob service on localhost:10000
@@ -243,6 +243,12 @@ Then:
 5. **Inspect the container** with Azure Storage Explorer (connect to the local emulator) or the Azure CLI
    against Azurite. Expect `silver/dt=…/HH.parquet`, `gold/dt=…/HH.parquet`, and
    `logs/visits-YYYY-MM-DD.log` (one JSON line per flush, whose `visitors[].ip_hash` is a salted HMAC of the client IP — no raw IP is stored).
+6. **What's-new / What's-coming lists.** Upload two text files to the container —
+   `updates/whats_new.txt` and `updates/whats_coming.txt`, one bullet per line. Unlike the
+   hourly writers above, the API **reads** these every 60 s (`api/updates.py`) and serves them on
+   `/stats`, so within a minute the dashboard's **✨ What's new** / **🚧 What's coming** header
+   buttons show your bullets. Edit a file and it updates live — no restart or redeploy. Leave the
+   files out and the buttons simply show a "check back soon" message.
 
 > Against a **real** Azure account, just paste the account's connection string (Portal → *Access keys →
 > Connection string*) and a container name into `secret.env` — the container is auto-created if missing.
