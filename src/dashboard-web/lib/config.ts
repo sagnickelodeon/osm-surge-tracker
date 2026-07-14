@@ -28,6 +28,10 @@ export const MAP_HEIGHT = 720; // taller so the left column fills the space besi
 export const MAP_LAT = 20.0;
 export const MAP_LON = 0.0;
 export const MAP_ZOOM = 2;
+// Don't let the user zoom out past the initial framing: further out, MapLibre
+// tiles repeated world copies that the daylight overlay doesn't cover, so the
+// extra copies show through unshaded.
+export const MAP_MIN_ZOOM = 2;
 
 // Free, token-less dark basemap (Carto) — keeps the dashboard zero-secret and zero-cost.
 export const MAP_STYLE =

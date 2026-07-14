@@ -194,7 +194,7 @@ Open `http://localhost:3000`.
 | ~30–90s | First Parquet snapshot written; `/heatmap` and `/stats` return real data. Until then the API logs "Snapshot(s) not ready" and serves empty results — this is normal |
 | ~5 min | Bronze table has enough rows that geocoding patterns are visible on the map |
 | ~7 days | Baselines established; z-score anomaly detection becomes active |
-| Any time | Cold-start fallback fires surges immediately if any region exceeds 2× global P95 |
+| Any time | Cold-start fallback fires surges immediately if any region exceeds 2× the P95 of multi-mapper edit volume |
 
 > All displayed times (dashboard header, surge "ago", history) are **IST (UTC+5:30)**.
 

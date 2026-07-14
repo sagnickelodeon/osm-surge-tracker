@@ -72,7 +72,7 @@ export default function MapLegend() {
         <div style={{ marginTop: "0.55rem" }}>
           {/* heatmap glow */}
           <div style={{ fontSize: "0.68rem", color: TEXT_LIGHT, marginBottom: "0.3rem" }}>
-            Glow — edit density
+            Glow — edits, last hour
           </div>
           <div
             style={{

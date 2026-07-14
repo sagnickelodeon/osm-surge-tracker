@@ -15,6 +15,13 @@ POLL_INTERVAL = 60
 BASE_URL = "https://planet.openstreetmap.org/replication/minute"
 STATE_FILE = Path(__file__).parent / "state.txt"
 
+# Cap how far back a restart will replay. The dashboard only serves recent data
+# (the heatmap looks back 1h), so replaying a long backlog after downtime is both
+# pointless and harmful — it floods the pipeline with stale edits that no query
+# window sees and that retention soon deletes. If the gap exceeds this many diffs
+# (~1h of minutely files), skip the stale history and resume near the live head.
+MAX_CATCHUP = 60
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
@@ -98,6 +105,17 @@ def main():
             remote_seq = fetch_remote_state()
 
             if remote_seq > last_seq:
+                gap = remote_seq - last_seq
+                # After long downtime, don't replay the whole backlog — skip ahead to
+                # the last MAX_CATCHUP diffs so we resume near the live head with fresh data.
+                if gap > MAX_CATCHUP:
+                    skip_to = remote_seq - MAX_CATCHUP
+                    logger.warning(
+                        "Gap of %d diffs exceeds MAX_CATCHUP=%d — skipping %d stale file(s), resuming at seq=%d",
+                        gap, MAX_CATCHUP, skip_to - last_seq, skip_to + 1,
+                    )
+                    last_seq = skip_to
+                    write_local_state(last_seq)
                 logger.info("Catching up: seq %d → %d (%d file(s))", last_seq + 1, remote_seq, remote_seq - last_seq)
                 for seq in range(last_seq + 1, remote_seq + 1):
                     process_sequence(seq, producer)

@@ -61,8 +61,11 @@ def _detect_surge(
             and edit_count > MIN_EDIT_COUNT
         )
     else:
-        # Cold-start fallback: flag if edit count is more than 2x the global 95th percentile
-        p95 = get_global_95th_percentile(conn)
+        # Cold-start fallback: flag if edit count is more than 2x the global 95th
+        # percentile of *multi-mapper* windows. Passing MIN_UNIQUE_USERS keeps the
+        # percentile from being inflated by single-account bulk imports (which are
+        # themselves never surges), so the bar stays meaningful on a fresh start.
+        p95 = get_global_95th_percentile(conn, MIN_UNIQUE_USERS)
         baseline_mean = p95
         z_score = -1.0  # sentinel — not a real z-score
         surge_magnitude = edit_count / max(p95, 1.0)

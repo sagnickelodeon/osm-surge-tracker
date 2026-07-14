@@ -1,6 +1,10 @@
 """
-Heatmap endpoint: edit density per region over the last 24 hours, used as the
-background layer of the dashboard map. Reads from the silver snapshot.
+Heatmap endpoint: edit density per region over the last hour, used as the
+background glow of the dashboard map. Reads from the silver snapshot.
+
+A short, recent window makes the glow a live pulse that tracks the waking/lit
+hemisphere, so it reinforces the map's daylight overlay ("activity follows the
+sun") rather than washing out into total regional volume over a full day.
 """
 
 from datetime import timedelta
@@ -14,7 +18,11 @@ from api.timeutil import now_ist
 
 router = APIRouter(tags=["heatmap"])
 
-# Sum edits per region over 24h, averaging per-window centroids into one point.
+# How far back the heatmap looks. Short by design (see module docstring); bump for
+# a denser but less time-of-day-correlated glow.
+HEATMAP_WINDOW_HOURS = 1
+
+# Sum edits per region over the window, averaging per-window centroids into one point.
 # Rows without a centroid (the null-coordinate bucket) have nowhere to draw — skip them.
 _HEATMAP_SQL = """
 SELECT
@@ -40,6 +48,6 @@ def _get_db(request: Request) -> duckdb.DuckDBPyConnection:
 async def get_heatmap(
     conn: duckdb.DuckDBPyConnection = Depends(_get_db),
 ) -> list[HeatmapPoint]:
-    cutoff = now_ist() - timedelta(hours=24)
+    cutoff = now_ist() - timedelta(hours=HEATMAP_WINDOW_HOURS)
     rows = query(conn, _HEATMAP_SQL, [cutoff])
     return [HeatmapPoint.model_validate(r) for r in rows]

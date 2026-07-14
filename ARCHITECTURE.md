@@ -95,7 +95,7 @@ Runs as a blocking loop (`time.sleep`). No asyncio. Fully independent of Compone
 Owns the outer loop: fetch remote sequence number → download missing diffs → push to Redis → sleep 60 s.
 
 - On first run: reads the current remote sequence from `planet.openstreetmap.org/replication/minute/state.txt` and writes it to `state.txt`. Editing starts from the *next* minute (no historical backfill).
-- On restart: reads `state.txt` and catches up from where it left off. Because `state.txt` is updated after *each* sequence (not each loop), crash recovery is fine-grained — at most one minutely diff is reprocessed.
+- On restart: reads `state.txt` and catches up from where it left off. Because `state.txt` is updated after *each* sequence (not each loop), crash recovery is fine-grained — at most one minutely diff is reprocessed. If the gap exceeds `MAX_CATCHUP` (60 diffs ≈ 1 h), the stale history is skipped and polling resumes near the live head — the dashboard only serves recent data, so replaying a long backlog after downtime would just flood the pipeline with stale edits no query window sees.
 - 404 responses are skipped silently (OSM sometimes has gaps in sequence numbers).
 - All other errors log the traceback and retry after `POLL_INTERVAL = 60 s`.
 
@@ -242,7 +242,7 @@ Also creates `idx_baselines` index on `(country_code, admin_region, hour_of_day)
 
 **`get_baseline(conn, country_code, admin_region, hour_of_day)`** — point lookup against the baselines table. Returns `{baseline_mean, baseline_std, sample_count}` or `None`. Converts SQL `NULL` std (returned by `STDDEV` when there is only one sample) to `0.0`.
 
-**`get_global_95th_percentile(conn)`** — `PERCENTILE_CONT(0.95)` over all silver `edit_count` values. Returns `50.0` when the silver table is empty (cold-start sentinel).
+**`get_global_95th_percentile(conn, min_unique_users)`** — `PERCENTILE_CONT(0.95)` over silver `edit_count` values, restricted to windows with `unique_users >= min_unique_users` (the detector passes its own `MIN_UNIQUE_USERS=3`). Excluding single-account bulk imports — which are never surges — keeps their huge volumes from inflating the cold-start threshold and masking genuine surges. Returns `50.0` when no qualifying window exists (cold-start sentinel).
 
 **`cleanup_old_records(conn)`** — deletes bronze rows older than 30 days, silver rows older than 90 days. Called by `cleanup_loop` in `processor.py` once per 24 hours.
 
@@ -460,7 +460,7 @@ API works correctly before any data exists.
 | Output (`data/api/`) | Source | Why this slice |
 |---|---|---|
 | `gold_surges.parquet` | full `gold_surges` | surges are rare — the whole table stays tiny |
-| `silver_windowed_edits.parquet` | last 48 h of silver | `/heatmap` needs 24 h; buffer covers skew |
+| `silver_windowed_edits.parquet` | last 48 h of silver | `/heatmap` needs 1 h; the buffer amply covers it plus skew |
 | `bronze_recent.parquet` | `processed_at`, last 2 h | all `/stats` needs to count edits/hour |
 
 This module is **additive** — it only reads from the live connection and writes
@@ -591,7 +591,7 @@ instead of becoming a broken empty path).
 | `GET /health` | — | `{status, timestamp}` |
 | `GET /surges/active` | gold | active surges, last 2 h, magnitude desc |
 | `GET /surges/history` | gold | filtered history (`days`, `country_code`, `min_magnitude`, `limit`) |
-| `GET /heatmap` | silver | per-region edit density, last 24 h |
+| `GET /heatmap` | silver | per-region edit density, last 1 h |
 | `GET /stats` | gold + bronze | surges today, countries, peak magnitude, edits/hr |
 | `POST /track` | — | visitor beacon; `TRACK_SECRET`-gated + rate-limited; records IP + user-agent into the hourly buffer, returns 204 |
 
@@ -640,18 +640,20 @@ dashboard-web/
 │   ├── SurgeFeed.tsx               active surge list
 │   ├── SurgeCard.tsx               one surge card + click-to-expand explanation
 │   ├── HistoryTable.tsx            collapsible 7-day history table
-│   └── SurgeMap.tsx                deck.gl dark world map (heatmap + surge layers)
+│   ├── MapLegend.tsx               map legend (daylight wash / glow / surge dots)
+│   └── SurgeMap.tsx                deck.gl dark world map (daylight + heatmap + surge layers)
 └── lib/
     ├── api.ts                      typed fetch helpers (safe empty defaults)
     ├── config.ts                   colours, timings, map defaults, severity helpers
     ├── countries.ts                COUNTRY_NAMES + countryName()
+    ├── terminator.ts               day/night terminator → daylight-hemisphere polygon
     └── time.ts                     IST clock / "mins ago" / history-time helpers
 ```
 
 > This component was rewritten from Streamlit to Next.js. Only the frontend changed —
 > the API contract (Component 3a) and everything upstream are untouched. The look and
 > layout were preserved; the move buys real client-side interactivity and full styling
-> control. Stack: Next.js 14 (App Router), React 18, TypeScript, deck.gl 9, MapLibre +
+> control. Stack: Next.js 16 (App Router), React 18, TypeScript, deck.gl 9, MapLibre +
 > react-map-gl, SWR.
 
 **Server-side proxy (the key deployment property).** The browser only ever calls
@@ -675,6 +677,23 @@ accents (`#FF4B4B` critical / `#FFA500` high / `#FFD700` elevated). The map uses
 **deck.gl** directly (pydeck was only a Python wrapper around it) on a free, token-less
 **Carto dark** basemap via MapLibre — so, unlike `mapbox://` styles, no Mapbox token or
 secret is required.
+
+**Daylight overlay ("activity follows the sun").** A faint light wash over the day
+hemisphere sits *beneath* the heatmap glow and surge dots, so the live 1-hour glow reads
+as a pulse tracking the waking/lit half of the planet. `lib/terminator.ts` computes the
+sub-solar point from the current time (standard low-precision solar position) and returns
+the day hemisphere as one deck.gl `SolidPolygonLayer` ring of `[lng, lat]` pairs; the ring
+closes over the lit pole so it never crosses the antimeridian and tessellates cleanly. The
+overlay recomputes every `REFRESH_INTERVAL_MS` (60 s), in step with the data poll — the
+terminator moves ~15°/h, so that cadence is smooth.
+
+**Single-world camera.** With the daylight wash covering exactly one world, the map turns
+off MapLibre's repeated world copies (`renderWorldCopies={false}`) — otherwise the extra,
+unshaded copies would show through. To keep the single world always filling the viewport,
+the camera is *controlled*: `SurgeMap` holds the view state and every pan/zoom passes
+through `clampToWorld`, which nudges the centre back so it can't roll past the ±180° /
+±85.05° edges into empty space. `MAP_MIN_ZOOM` (= initial zoom) blocks zooming out far
+enough to reveal more than one world.
 
 **Layout:** a 70/30 CSS-grid split of world map (left) and live surge feed (right), with
 the collapsible 7-day history table on a **full-width row below** both columns.

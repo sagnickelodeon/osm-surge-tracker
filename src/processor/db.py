@@ -124,9 +124,26 @@ def get_baseline(
     }
 
 
-def get_global_95th_percentile(conn: duckdb.DuckDBPyConnection) -> float:
+def get_global_95th_percentile(
+    conn: duckdb.DuckDBPyConnection, min_unique_users: int = 1
+) -> float:
+    """95th percentile of per-window edit counts — over multi-mapper windows only.
+
+    The cold-start fallback (anomaly_detector) compares a window against 2x this to
+    decide "unusually high" before any baseline exists. Single-account bulk imports
+    are never surges (they fail the unique_users gate), but if counted here their
+    huge volumes inflate the percentile and mask genuine surges — most harmfully
+    during cold start, when this is the *only* detector. Restricting to windows with
+    >= min_unique_users keeps the threshold representative of real multi-mapper
+    activity, so pass the same floor the detector uses.
+    """
     row = conn.execute(
-        "SELECT PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY edit_count) FROM silver_windowed_edits"
+        """
+        SELECT PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY edit_count)
+        FROM silver_windowed_edits
+        WHERE unique_users >= ?
+        """,
+        [min_unique_users],
     ).fetchone()
 
     if row is None or row[0] is None:

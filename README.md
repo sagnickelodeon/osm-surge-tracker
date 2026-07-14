@@ -58,7 +58,7 @@ A region is flagged only when **all** conditions hold simultaneously (tuned to s
 - `surge_magnitude > 10.0` — at least 10× its normal edit volume
 - `edit_count > 1000` — enough absolute volume to matter
 
-A cold-start fallback (before baselines exist) flags regions exceeding **2× the global 95th percentile** (with the same `edit_count`, `surge_magnitude`, and `unique_users` floors).
+A cold-start fallback (before baselines exist) flags regions exceeding **2× the 95th percentile of multi-mapper edit volume** (single-account bulk imports are excluded so they can't inflate the threshold; the same `edit_count`, `surge_magnitude`, and `unique_users` floors apply).
 
 ---
 
@@ -172,7 +172,7 @@ Base URL: `http://<host>:8000`
 | `GET` | `/health` | Liveness probe → `{status, timestamp}` |
 | `GET` | `/surges/active` | Active surges in the last 2 h, strongest first |
 | `GET` | `/surges/history` | Historical surges. Params: `days` (≤90), `country_code`, `min_magnitude`, `limit` (≤1000) |
-| `GET` | `/heatmap` | Per-region edit density, last 24 h |
+| `GET` | `/heatmap` | Per-region edit density, last 1 h (a live pulse that tracks the daytime hemisphere) |
 | `GET` | `/stats` | Header summary: surges today, countries, peak magnitude, edits/hr |
 | `POST` | `/track` | Visitor beacon (fired by the dashboard); records a salted **hash** of the IP + user-agent for the hourly visitor log → 204 |
 
