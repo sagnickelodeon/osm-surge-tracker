@@ -11,7 +11,17 @@ STREAM_MAXLEN = 500_000
 
 class RedisProducer:
     def __init__(self, host: str = "localhost", port: int = 6379):
-        self._client = redis.Redis(host=host, port=port, decode_responses=True)
+        # socket_connect_timeout / socket_timeout are essential: without them a host
+        # that accepts the TCP connection but never replies (e.g. a broken Docker/WSL
+        # port relay) makes ping() and every command block *forever* with no output.
+        # With a timeout the call fails fast and the caller can log + abort.
+        self._client = redis.Redis(
+            host=host,
+            port=port,
+            decode_responses=True,
+            socket_connect_timeout=5,
+            socket_timeout=5,
+        )
         self._host = host
         self._port = port
 

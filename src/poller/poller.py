@@ -86,9 +86,15 @@ def main():
     redis_host = os.environ.get("REDIS_HOST", "localhost")
     redis_port = int(os.environ.get("REDIS_PORT", "6379"))
 
+    logger.info("Poller starting — connecting to Redis at %s:%d ...", redis_host, redis_port)
     producer = RedisProducer(host=redis_host, port=redis_port)
     if not producer.ping():
-        logger.error("Cannot connect to Redis at %s:%d — aborting", redis_host, redis_port)
+        logger.error(
+            "Cannot connect to Redis at %s:%d — aborting. Is Redis running? On Windows, "
+            "prefer REDIS_HOST=127.0.0.1 over 'localhost' (localhost may resolve to a "
+            "non-responsive IPv6 endpoint).",
+            redis_host, redis_port,
+        )
         raise SystemExit(1)
     logger.info("Connected to Redis at %s:%d", redis_host, redis_port)
 

@@ -12,8 +12,6 @@ import {
   TEXT_MID,
 } from "@/lib/config";
 
-const CONTACT_EMAIL = "sagnikdasgupta.dataengineer@gmail.com";
-
 const TYPES = [
   "Feature Request",
   "Bug Report",
@@ -43,15 +41,18 @@ export default function FeedbackModal({
   onClose: () => void;
 }) {
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [type, setType] = useState<FeedbackType>("Feature Request");
   const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
 
   function handleClose() {
-    // Reset after close animation would finish; just reset immediately.
+    // Reset the form once it's been submitted so reopening starts clean.
     if (submitted) {
       setName("");
+      setEmail("");
       setType("Feature Request");
       setMessage("");
       setSubmitted(false);
@@ -60,28 +61,32 @@ export default function FeedbackModal({
     onClose();
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!message.trim()) {
       setError("Please enter a message before submitting.");
       return;
     }
     setError("");
-
-    const subject = encodeURIComponent(
-      `[OSM Surge Tracker] ${type}${name.trim() ? ` — ${name.trim()}` : ""}`,
-    );
-    const body = encodeURIComponent(
-      [
-        `From: ${name.trim() || "Anonymous"}`,
-        `Type: ${type}`,
-        "",
-        message.trim(),
-      ].join("\n"),
-    );
-
-    window.open(`mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`, "_blank");
-    setSubmitted(true);
+    setSubmitting(true);
+    try {
+      const r = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          type,
+          feedback: message.trim(),
+        }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setSubmitted(true);
+    } catch {
+      setError("Couldn't send your feedback — please try again in a moment.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -90,31 +95,15 @@ export default function FeedbackModal({
         {submitted ? (
           // Success state
           <div style={{ textAlign: "center", padding: "2rem 1rem" }}>
-            <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>📬</div>
+            <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>✅</div>
             <div
               style={{ color: COLOR_ELEVATED, fontWeight: 700, marginBottom: "0.5rem" }}
             >
-              Email client opened!
+              Thanks for your feedback!
             </div>
             <div style={{ color: TEXT_LIGHT, fontSize: "0.82rem", marginBottom: "1.5rem" }}>
-              Your feedback was pre-filled into a new email to{" "}
-              <span style={{ color: "#FFFFFF" }}>{CONTACT_EMAIL}</span>. Just hit send
-              whenever you&apos;re ready.
-            </div>
-            <div
-              style={{ color: TEXT_MID, fontSize: "0.75rem", marginBottom: "1.5rem" }}
-            >
-              Didn&apos;t open? Copy this address and paste it into your email client:
-              <br />
-              <span
-                style={{
-                  color: COLOR_ELEVATED,
-                  fontFamily: "monospace",
-                  userSelect: "all",
-                }}
-              >
-                {CONTACT_EMAIL}
-              </span>
+              Your message has been received. I read every submission and use it to
+              improve the tracker.
             </div>
             <button
               onClick={handleClose}
@@ -143,7 +132,7 @@ export default function FeedbackModal({
               }}
             >
               Got a suggestion, found a bug, or want to share an observation? Fill in
-              the form below — it opens a pre-filled email for you to send.
+              the form below and hit send — it's that simple.
             </div>
 
             {/* Name */}
@@ -165,6 +154,31 @@ export default function FeedbackModal({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Your name"
+                style={inputStyle}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "#4a4d55")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = BORDER)}
+              />
+            </div>
+
+            {/* Email */}
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.7rem",
+                  color: TEXT_MID,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  marginBottom: "0.35rem",
+                }}
+              >
+                Email <span style={{ color: TEXT_DARK }}>(optional — only if you&apos;d like a reply)</span>
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
                 style={inputStyle}
                 onFocus={(e) => (e.currentTarget.style.borderColor = "#4a4d55")}
                 onBlur={(e) => (e.currentTarget.style.borderColor = BORDER)}
@@ -233,52 +247,40 @@ export default function FeedbackModal({
               )}
             </div>
 
-            {/* Footer row */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <span style={{ fontSize: "0.72rem", color: TEXT_DARK }}>
-                Sends to{" "}
-                <span style={{ color: TEXT_MID, fontFamily: "monospace" }}>
-                  {CONTACT_EMAIL}
-                </span>
-              </span>
-              <div style={{ display: "flex", gap: "0.6rem" }}>
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  style={{
-                    background: "transparent",
-                    border: `1px solid ${BORDER}`,
-                    borderRadius: 4,
-                    color: TEXT_MID,
-                    cursor: "pointer",
-                    fontSize: "0.8rem",
-                    padding: "0.5rem 1rem",
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  style={{
-                    background: CARD_BG_ALT,
-                    border: `1px solid ${COLOR_ELEVATED}`,
-                    borderRadius: 4,
-                    color: COLOR_ELEVATED,
-                    cursor: "pointer",
-                    fontSize: "0.8rem",
-                    fontWeight: 600,
-                    padding: "0.5rem 1.25rem",
-                  }}
-                >
-                  Open Email ↗
-                </button>
-              </div>
+            {/* Footer row — Cancel on the left, Send on the right for symmetry */}
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "0.6rem" }}>
+              <button
+                type="button"
+                onClick={handleClose}
+                style={{
+                  background: "transparent",
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 4,
+                  color: TEXT_MID,
+                  cursor: "pointer",
+                  fontSize: "0.8rem",
+                  padding: "0.5rem 1rem",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                style={{
+                  background: CARD_BG_ALT,
+                  border: `1px solid ${COLOR_ELEVATED}`,
+                  borderRadius: 4,
+                  color: COLOR_ELEVATED,
+                  cursor: submitting ? "default" : "pointer",
+                  fontSize: "0.8rem",
+                  fontWeight: 600,
+                  padding: "0.5rem 1.25rem",
+                  opacity: submitting ? 0.6 : 1,
+                }}
+              >
+                {submitting ? "Sending…" : "Send Feedback"}
+              </button>
             </div>
           </form>
         )}

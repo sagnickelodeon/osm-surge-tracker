@@ -55,7 +55,7 @@ def append_line(blob_name: str, text: str) -> None:
         # create_append_blob fails if the blob already exists — guard with exists().
         blob.create_append_blob()
     blob.append_block((text + "\n").encode("utf-8"))
-    logger.info("Appended visitor log line to %s", blob_name)
+    logger.info("Appended one line to %s", blob_name)
 
 
 def read_text(blob_name: str) -> str | None:

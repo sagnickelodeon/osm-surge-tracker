@@ -249,6 +249,12 @@ Then:
    `/stats`, so within a minute the dashboard's **✨ What's new** / **🚧 What's coming** header
    buttons show your bullets. Edit a file and it updates live — no restart or redeploy. Leave the
    files out and the buttons simply show a "check back soon" message.
+7. **Feedback.** Submit the dashboard's Feedback modal — it POSTs to `/feedback`, which **appends**
+   a `{name, email, type, feedback, submitted_at}` JSON line to `updates/feedback.jsonl`
+   (`api/feedback.py`; an append blob created on first submit — one JSON object per line, not an
+   array). Re-open the blob in Storage Explorer to see the growing JSONL file. Writes are rate-limited
+   (4/min per IP, plus a 20/min process-wide ceiling). Best-effort: with Azure unconfigured the modal
+   still shows success, the entry is just not stored.
 
 > Against a **real** Azure account, just paste the account's connection string (Portal → *Access keys →
 > Connection string*) and a container name into `secret.env` — the container is auto-created if missing.

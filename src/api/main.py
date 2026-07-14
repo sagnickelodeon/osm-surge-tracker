@@ -26,7 +26,7 @@ from api.auth import SecretGateMiddleware
 from api.db import get_connection
 from api.models import HealthResponse
 from api.ratelimit import limiter
-from api.routes import heatmap, stats, surges, track
+from api.routes import feedback, heatmap, stats, surges, track
 
 logging.basicConfig(
     level=logging.INFO,
@@ -91,6 +91,7 @@ app.include_router(surges.router, prefix="/surges")
 app.include_router(heatmap.router, prefix="/heatmap")
 app.include_router(stats.router, prefix="/stats")
 app.include_router(track.router, prefix="/track")
+app.include_router(feedback.router, prefix="/feedback")
 
 
 @app.get("/health", response_model=HealthResponse)

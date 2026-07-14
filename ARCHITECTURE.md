@@ -536,12 +536,14 @@ api/
 ├── timeutil.py        IST helpers — now_ist(), IST tzinfo
 ├── visitors.py        in-memory visitor buffer (3000-IP/hr cap) + hourly flush_loop → Azure Blob log
 ├── updates.py         60s Blob refresh of What's-new/coming lists → served inline on /stats
-├── blob_storage.py    Azure append-blob helper + read_text() (no-op if unconfigured)
+├── feedback.py        append feedback JSON line → updates/feedback.jsonl append blob (+ 20/min global cap)
+├── blob_storage.py    Azure blob helpers: append_line + read_text (no-op if unconfigured)
 ├── routes/
 │   ├── surges.py      /surges/active, /surges/history
 │   ├── heatmap.py     /heatmap
 │   ├── stats.py       /stats (+ whats_new / whats_coming update lists)
-│   └── track.py       POST /track (visitor beacon; auth via central gate, rate-limited)
+│   ├── track.py       POST /track (visitor beacon; auth via central gate, rate-limited)
+│   └── feedback.py    POST /feedback (append to feedback.jsonl; gated + rate-limited 4/min/IP)
 └── requirements.txt
 ```
 
@@ -595,6 +597,7 @@ instead of becoming a broken empty path).
 | `GET /heatmap` | silver | per-region edit density, last 1 h |
 | `GET /stats` | gold + bronze | surges today, countries, peak magnitude, edits/hr + `whats_new`/`whats_coming` |
 | `POST /track` | — | visitor beacon; `TRACK_SECRET`-gated + rate-limited; records IP + user-agent into the hourly buffer, returns 204 |
+| `POST /feedback` | — | appends `{name,email,type,feedback,submitted_at}` as a JSON line to the `updates/feedback.jsonl` append blob; gated + rate-limited (4/min/IP **and** a 20/min process-wide write ceiling), returns 204 |
 
 **Visitor logging (`visitors.py` + `blob_storage.py`).** The dashboard fires a one-shot
 beacon per page load to `POST /track` via the Next.js proxy. Because the API is exposed
@@ -635,7 +638,8 @@ dashboard-web/
 │   ├── page.tsx                    dashboard page: SWR polling, layout, banner
 │   ├── globals.css                 base CSS, scrollbars, deck.gl tooltip style
 │   ├── api/osm/[...path]/route.ts  server-side GET proxy → API_BASE_URL (adds TRACK_SECRET)
-│   └── api/track/route.ts          POST beacon proxy → API_BASE_URL/track (adds TRACK_SECRET + trusted x-client-ip)
+│   ├── api/track/route.ts          POST beacon proxy → API_BASE_URL/track (adds TRACK_SECRET + trusted x-client-ip)
+│   └── api/feedback/route.ts       POST feedback proxy → API_BASE_URL/feedback (adds TRACK_SECRET + client IP)
 ├── components/
 │   ├── Header.tsx                  title bar (IST clock) + four metric tiles + action buttons
 │   ├── SurgeFeed.tsx               active surge list
@@ -667,12 +671,13 @@ the API stays **plain HTTP** — the browser never talks to the API directly, so
 mixed-content problem. (This preserves the property the old Streamlit app had via its
 server-side `httpx` fetch.) The data backend is read-only, so the catch-all proxy only
 forwards `GET`; any upstream failure becomes a 502 that the client converts to a safe empty
-value. The **one write path** is visitor tracking: a separate `app/api/track/route.ts`
-handles the `POST` beacon. It authenticates to the API with the shared `TRACK_SECRET`
-(`x-track-secret`) and forwards the visitor's real IP as `x-client-ip` — derived from
-Vercel's trusted `x-real-ip`, **not** the client-supplied `X-Forwarded-For` — plus the
-user-agent. `TRACK_SECRET` is the only extra Vercel env var; Azure credentials live only on
-the VM (processor + API), never on Vercel — the dashboard just relays the beacon.
+value. The **two write paths** are visitor tracking and feedback, each a separate POST
+proxy: `app/api/track/route.ts` handles the beacon, and `app/api/feedback/route.ts` relays
+a feedback submission to `POST /feedback`. Both authenticate to the API with the shared
+`TRACK_SECRET` (`x-track-secret`) and forward the visitor's real IP as `x-client-ip` —
+derived from Vercel's trusted `x-real-ip`, **not** the client-supplied `X-Forwarded-For`.
+`TRACK_SECRET` is the only extra Vercel env var; Azure credentials live only on the VM
+(processor + API), never on Vercel — the dashboard just relays these POSTs.
 
 **Design:** the same dark "intelligence monitor" aesthetic — `#0E1117` base, severity
 accents (`#FF4B4B` critical / `#FFA500` high / `#FFD700` elevated). The map uses
