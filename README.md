@@ -54,9 +54,9 @@ When a flood hits Karnataka or an earthquake strikes Türkiye, volunteers flood 
 A region is flagged only when **all** conditions hold simultaneously (tuned to suppress false positives):
 
 - `unique_users >= 3` — multiple independent mappers, not a single-account bulk import
-- `z_score > 4.0` — statistically unusual vs. the region's baseline for that hour of day
-- `surge_magnitude > 10.0` — at least 10× its normal edit volume
-- `edit_count > 1000` — enough absolute volume to matter
+- `z_score > 3.0` — statistically unusual vs. the region's baseline for that hour of day
+- `surge_magnitude > 5.0` — at least 5× its normal edit volume
+- `edit_count > 500` — enough absolute volume to matter
 
 A cold-start fallback (before baselines exist) flags regions exceeding **2× the 95th percentile of multi-mapper edit volume** (single-account bulk imports are excluded so they can't inflate the threshold; the same `edit_count`, `surge_magnitude`, and `unique_users` floors apply).
 

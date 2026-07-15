@@ -156,14 +156,14 @@ export default function TutorialModal({
               <Dot color={COLOR_CRITICAL} />
               <div>
                 <Tag color={COLOR_CRITICAL} label="CRITICAL" />
-                <span>≥ 25× normal edit volume — possible major disaster response or mass mapping event.</span>
+                <span>≥ 15× normal edit volume — possible major disaster response or mass mapping event.</span>
               </div>
             </Row>
             <Row>
               <Dot color={COLOR_HIGH} />
               <div>
                 <Tag color={COLOR_HIGH} label="HIGH" />
-                <span>15–25× normal — significant regional surge, worth investigating.</span>
+                <span>8–15× normal — significant regional surge, worth investigating.</span>
               </div>
             </Row>
             <Row>
@@ -171,8 +171,8 @@ export default function TutorialModal({
               <div>
                 <Tag color={COLOR_ELEVATED} label="ELEVATED" />
                 <span>
-                  10–15× normal — the smallest confirmed surges (the detector&apos;s
-                  magnitude floor is 10×, so nothing milder is flagged).
+                  5–8× normal — the smallest confirmed surges (the detector&apos;s
+                  magnitude floor is 5×, so nothing milder is flagged).
                 </span>
               </div>
             </Row>
@@ -237,9 +237,9 @@ export default function TutorialModal({
           >
             {[
               ["Unique mappers ≥ 3", "Multiple independent editors — excludes single-account bulk imports"],
-              ["z-score > 4.0", "Statistically unusual vs. the region's rolling 7-day, hour-of-day baseline"],
-              ["Magnitude > 10×", "At least 10× the region's normal edit volume for that hour"],
-              ["Edit count > 1000", "Enough absolute activity to matter"],
+              ["z-score > 3.0", "Statistically unusual vs. the region's rolling 7-day, hour-of-day baseline"],
+              ["Magnitude > 5×", "At least 5× the region's normal edit volume for that hour"],
+              ["Edit count > 500", "Enough absolute activity to matter"],
             ].map(([stat, desc]) => (
               <div key={stat} style={{ display: "flex", gap: "0.75rem" }}>
                 <span

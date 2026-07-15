@@ -11,9 +11,9 @@ from db import get_baseline, get_global_95th_percentile
 from enricher import country_name_for_code
 from timeutil import now_ist
 
-ZSCORE_THRESHOLD    = 4.0
-MAGNITUDE_THRESHOLD = 10.0
-MIN_EDIT_COUNT      = 1000
+ZSCORE_THRESHOLD    = 3.0
+MAGNITUDE_THRESHOLD = 5.0
+MIN_EDIT_COUNT      = 500
 MIN_UNIQUE_USERS    = 3     # require ≥3 independent mappers — see note in _detect_surge
 BASELINE_MIN_SAMPLES = 10
 

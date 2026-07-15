@@ -6,9 +6,9 @@
 export const REFRESH_INTERVAL_MS = 60_000;
 
 // Severity colours (match the surge-magnitude thresholds used by the detector).
-export const COLOR_CRITICAL = "#FF4B4B"; // surge_magnitude >= 25
-export const COLOR_HIGH = "#FFA500"; // surge_magnitude 15–25
-export const COLOR_ELEVATED = "#FFD700"; // surge_magnitude 10–15 (floor = detector's 10× threshold)
+export const COLOR_CRITICAL = "#FF4B4B"; // surge_magnitude >= 15
+export const COLOR_HIGH = "#FFA500"; // surge_magnitude 8–15
+export const COLOR_ELEVATED = "#FFD700"; // surge_magnitude 5–8 (floor = detector's 5× threshold)
 
 // Card surfaces
 export const CARD_BG = "#13161C";
@@ -49,14 +49,14 @@ export const COLOR_ELEVATED_RGB: [number, number, number, number] = [255, 215, 0
 
 /** Severity colour + label for a surge magnitude. */
 export function severity(magnitude: number): { color: string; label: string } {
-  if (magnitude >= 25) return { color: COLOR_CRITICAL, label: "CRITICAL" };
-  if (magnitude >= 15) return { color: COLOR_HIGH, label: "HIGH" };
+  if (magnitude >= 15) return { color: COLOR_CRITICAL, label: "CRITICAL" };
+  if (magnitude >= 8) return { color: COLOR_HIGH, label: "HIGH" };
   return { color: COLOR_ELEVATED, label: "ELEVATED" };
 }
 
 /** Severity RGBA for the map scatter layer. */
 export function surgeColorRGB(magnitude: number): [number, number, number, number] {
-  if (magnitude >= 25) return COLOR_CRITICAL_RGB;
-  if (magnitude >= 15) return COLOR_HIGH_RGB;
+  if (magnitude >= 15) return COLOR_CRITICAL_RGB;
+  if (magnitude >= 8) return COLOR_HIGH_RGB;
   return COLOR_ELEVATED_RGB;
 }

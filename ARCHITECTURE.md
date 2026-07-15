@@ -358,20 +358,20 @@ mappers are never counted as surges (not written to gold at all).
 ```
 z_score       = (edit_count − baseline_mean) / max(baseline_std, 1.0)
 surge_magnitude = edit_count / max(baseline_mean, 1.0)
-is_surge      = z_score > 4.0
-              AND surge_magnitude > 10.0
-              AND edit_count > 1000
+is_surge      = z_score > 3.0
+              AND surge_magnitude > 5.0
+              AND edit_count > 500
 ```
 
 Conditions required simultaneously to prevent false positives:
 - `unique_users >= 3` (`MIN_UNIQUE_USERS`) — excludes single-account bulk imports
-- `z_score > 4.0` (`ZSCORE_THRESHOLD`) — statistically unusual
-- `surge_magnitude > 10.0` (`MAGNITUDE_THRESHOLD`) — at least 10× above baseline volume
-- `edit_count > 1000` (`MIN_EDIT_COUNT`) — a real, baseline-independent absolute floor
+- `z_score > 3.0` (`ZSCORE_THRESHOLD`) — statistically unusual
+- `surge_magnitude > 5.0` (`MAGNITUDE_THRESHOLD`) — at least 5× above baseline volume
+- `edit_count > 500` (`MIN_EDIT_COUNT`) — a real, baseline-independent absolute floor
 
 **Cold-start path** (baseline missing or fewer than 10 samples):
 ```
-is_surge = edit_count > global_p95 × 2  AND  edit_count > 1000  AND  surge_magnitude > 10.0
+is_surge = edit_count > global_p95 × 2  AND  edit_count > 500  AND  surge_magnitude > 5.0
 ```
 (the `unique_users >= 3` precondition applies here too). `z_score` is set to `-1.0` as a
 sentinel so downstream code can tell this was a cold-start detection.
