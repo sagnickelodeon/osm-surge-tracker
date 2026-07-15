@@ -92,7 +92,7 @@ A cold-start fallback (before baselines exist) flags regions exceeding **2× the
     │   ├── blob_uploader.py hourly silver/gold archive → Azure Blob (optional)
     │   └── timeutil.py      IST timezone helpers (now_ist)
     ├── api/            Component 3a — FastAPI read API
-    │   ├── main.py · db.py · models.py · timeutil.py · routes/{surges,heatmap,stats,track}.py
+    │   ├── main.py · cache.py · db.py · models.py · timeutil.py · routes/{surges,heatmap,stats,track}.py
     │   ├── updates.py  60s Blob refresh of what's-new/coming lists → served via /stats
     │   ├── feedback.py append dashboard feedback → updates/feedback.jsonl (Azure Blob)
     │   └── visitors.py · blob_storage.py  hourly visitor log → Azure Blob (optional)
@@ -192,6 +192,8 @@ All endpoints return empty lists/objects rather than errors on missing data, so 
 
 **Why Parquet snapshots between the processor and the API?**
 DuckDB allows only one process to hold a database file open read-write. The processor keeps that lock for life, so the API (a separate process) cannot open the same file — *not even read-only*. The processor therefore exports the API's tables to Parquet every 60 s, and the API queries those files through its own in-memory DuckDB connection: no lock contention, multiple readers, always fresh. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full reasoning.
+
+**Read caching.** The public GET endpoints are cached in-process for 15 s (`api/cache.py`) and carry `Cache-Control: public, s-maxage=15, stale-while-revalidate=60`, which the dashboard's Vercel proxy forwards so the edge serves most polls — keeping the single VM's load largely independent of concurrent users. The cache sits *inside* the secret gate, so a cached body never reaches an unauthenticated caller; responses expose `x-cache: HIT|MISS`.
 
 **Resilience.** Every long-running loop is wrapped in `while True: try/except`, so a transient failure restarts one coroutine without taking down the rest. Redis consumer groups give at-least-once delivery (messages are ACKed only after a confirmed DuckDB write). The CPU-bound geocoder runs via `asyncio.to_thread` so it can't stall the event loop, and the explainer caps concurrent GDELT/OpenAI calls with a semaphore so a surge burst can't self-DoS into timeouts. The dashboard degrades gracefully — an unreachable API shows a banner, not a stack trace.
 

@@ -527,9 +527,10 @@ so data is never more than ~60 s stale.
 
 ```
 api/
-├── main.py            FastAPI app: load_dotenv, lifespan, secret gate + CORS, /health,
-│                      router wiring, rate-limiter registration, visitor flush task
+├── main.py            FastAPI app: load_dotenv, lifespan, response cache + secret gate + CORS,
+│                      /health, router wiring, rate-limiter registration, visitor flush task
 ├── auth.py            SecretGateMiddleware — TRACK_SECRET gate over the whole API (except /health); APP_ENV=production fail-closed startup guard
+├── cache.py           ResponseCacheMiddleware — 15s in-process cache for the GET reads; emits the edge Cache-Control (s-maxage=15)
 ├── db.py              in-memory DuckDB connection + Parquet-view query helpers
 ├── models.py          Pydantic response models + validators (IST serialisation)
 ├── ratelimit.py       slowapi limiter for POST /track (60/min per client IP; no NGINX)
@@ -572,6 +573,13 @@ instead of becoming a broken empty path).
   timestamps in the snapshots.
 - Endpoints are `async def` sharing one connection; since a DuckDB call never yields
   mid-query, requests can't interleave on it — no pool or lock needed.
+- **Response cache** (`api/cache.py` `ResponseCacheMiddleware`): the public GET reads
+  (`/surges`, `/heatmap`, `/stats`) are cached in-process for **15 s**, so DuckDB runs at
+  most ~once per 15 s per URL instead of on every poll, and the same middleware stamps the
+  `Cache-Control` the Vercel edge reads. It is registered **inside** the secret gate (added
+  before it in `main.py`, so the gate wraps it and runs first) — a cached body is therefore
+  never served to an unauthenticated caller; writes and `/health` bypass the cache. Each
+  response carries `x-cache: HIT|MISS`.
 - Timestamps come out of DuckDB naive (IST); a Pydantic validator attaches the IST
   offset so the JSON carries `+05:30`. `news_headlines` is a JSON string that a
   validator parses into a typed list.
@@ -671,7 +679,11 @@ the API stays **plain HTTP** — the browser never talks to the API directly, so
 mixed-content problem. (This preserves the property the old Streamlit app had via its
 server-side `httpx` fetch.) The data backend is read-only, so the catch-all proxy only
 forwards `GET`; any upstream failure becomes a 502 that the client converts to a safe empty
-value. The **two write paths** are visitor tracking and feedback, each a separate POST
+value. **Read caching:** the proxy forwards the API's `Cache-Control` on a 200 (the API sets
+`public, s-maxage=15, stale-while-revalidate=60` on the GET reads via `api/cache.py`), so
+Vercel's edge caches each read per-URL for ~15 s — origin load becomes largely independent of
+concurrent users. Errors are never cached, and the proxy's own fetch stays `no-store` so a
+cache miss always pulls fresh from the VM. The **two write paths** are visitor tracking and feedback, each a separate POST
 proxy: `app/api/track/route.ts` handles the beacon, and `app/api/feedback/route.ts` relays
 a feedback submission to `POST /feedback`. Both authenticate to the API with the shared
 `TRACK_SECRET` (`x-track-secret`) and forward the visitor's real IP as `x-client-ip` —

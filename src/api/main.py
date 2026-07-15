@@ -23,6 +23,7 @@ from slowapi.errors import RateLimitExceeded
 
 from api import updates, visitors
 from api.auth import SecretGateMiddleware
+from api.cache import ResponseCacheMiddleware
 from api.db import get_connection
 from api.models import HealthResponse
 from api.ratelimit import limiter
@@ -73,6 +74,11 @@ app = FastAPI(
 # and its 429 handler registered; only POST /track is decorated.
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Response cache for the public GET reads (spares DuckDB + emits the edge Cache-Control).
+# Added before the gate so the gate wraps it (runs first) — a cached body is therefore
+# never served to an unauthenticated caller. See api/cache.py.
+app.add_middleware(ResponseCacheMiddleware)
 
 # Access gate: when TRACK_SECRET is set, every endpoint but /health requires it.
 # Added before CORS so it runs as the outer layer. See api/auth.py.

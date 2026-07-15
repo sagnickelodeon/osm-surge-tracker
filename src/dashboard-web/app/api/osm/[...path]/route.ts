@@ -18,9 +18,6 @@ const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:8000";
 // Authenticates this proxy to the gated API; must match the backend's TRACK_SECRET.
 const TRACK_SECRET = process.env.TRACK_SECRET || "";
 
-// Server-side, never cached — the dashboard wants fresh data each poll.
-export const dynamic = "force-dynamic";
-
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
@@ -40,11 +37,17 @@ export async function GET(
       cache: "no-store",
     });
     const body = await upstream.text();
+    // Forward the API's Cache-Control on success so Vercel's edge can cache the read
+    // (the API sets `s-maxage=…` on the public GET endpoints — see src/api/cache.py),
+    // making origin load independent of user count. Errors are never cached.
+    const cacheControl = upstream.ok
+      ? upstream.headers.get("cache-control") ?? "no-store"
+      : "no-store";
     return new NextResponse(body, {
       status: upstream.status,
       headers: {
         "content-type": upstream.headers.get("content-type") ?? "application/json",
-        "cache-control": "no-store",
+        "cache-control": cacheControl,
       },
     });
   } catch {

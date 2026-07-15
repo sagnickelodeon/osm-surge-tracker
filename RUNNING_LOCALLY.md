@@ -141,6 +141,11 @@ curl http://localhost:8000/surges/active
 # Heatmap (populated after first Parquet snapshot)
 curl http://localhost:8000/heatmap
 
+# The GET reads are cached in-process for 15s (api/cache.py). Add -i to see the headers:
+#   Cache-Control: public, s-maxage=15, ...   and   x-cache: HIT|MISS
+# A second call within 15s returns x-cache: HIT and doesn't touch DuckDB.
+curl -i http://localhost:8000/stats
+
 # History with filters
 curl "http://localhost:8000/surges/history?days=7&min_magnitude=3.0"
 ```
